@@ -11,7 +11,7 @@
 #                                                                             #
 #      http://aquatic.science.uwa.edu.au/                                     #
 #                                                                             #
-#  Copyright 2013-2025 - The University of Western Australia                  #
+#  Copyright 2013-2026 : The University of Western Australia                  #
 #                                                                             #
 #   GLM is free software: you can redistribute it and/or modify               #
 #   it under the terms of the GNU General Public License as published by      #
@@ -140,20 +140,20 @@ ifeq ($(FABM),true)
 endif
 
 EXTFFLAGS=
-ifeq ($(AED),true)
+ifeq ($(WITH_AED),true)
   DEFINES+=-DAED
 endif
-ifeq ($(API),true)
+ifeq ($(WITH_API),true)
   DEFINES+=-DAPI
-  AED=true
+  WITH_AED=true
 endif
 
-ifeq ($(AED),true)
+ifeq ($(WITH_AED),true)
   AEDWATDIR=../libaed-water
   FINCLUDES+=-I$(AEDWATDIR)/include -I$(AEDWATDIR)/mod
   CINCLUDES+=-I$(AEDWATDIR)/include
   AEDLIBS=-L$(AEDWATDIR)/lib -laed-water
-  ifeq ($(API),true)
+  ifeq ($(WITH_API),true)
     AEDAPIDIR=../libaed-api
     FINCLUDES+=-I$(AEDAPIDIR)/include -I$(AEDAPIDIR)/mod
     CINCLUDES+=-I$(AEDAPIDIR)/include
@@ -164,15 +164,17 @@ ifeq ($(AED),true)
   else
     EXTFFLAGS+=-DNO_BENTHIC
   endif
-  ifdef AEDRIPDIR
-    AEDLIBS+=-L$(AEDRIPDIR)/lib -laed-riparian
-  else
-    EXTFFLAGS+=-DNO_RIPARIAN
-  endif
   ifdef AEDDMODIR
     AEDLIBS+=-L$(AEDDMODIR)/lib -laed-demo
   else
     EXTFFLAGS+=-DNO_DEMO
+  endif
+
+  # the plus version libs
+  ifdef AEDRIPDIR
+    AEDLIBS+=-L$(AEDRIPDIR)/lib -laed-riparian
+  else
+    EXTFFLAGS+=-DNO_RIPARIAN
   endif
   ifdef AEDLGTDIR
     AEDLIBS+=-L$(AEDLGTDIR)/lib -laed-lighting
@@ -234,25 +236,19 @@ ifeq ($(F90),ifort)
   FLIBS+=-limf -lintlc -liomp5 -lifport
   #EXTFFLAGS=-warn-no-unused-dummy-argument
 else ifeq ($(F90),ifx)
-# INCLUDES+=-I/opt/intel/oneapi/compiler/latest/include
-# LINK=$(CC)
   DEBUG_FFLAGS=-g -traceback -DDEBUG=1 -O0
   OMPFLAG=-qopenmp
   OPT_FFLAGS=-O3
   ifeq ($(OSTYPE),Msys)
-#   LINK=$(FC) /link /nofor_main
     LINK=$(FC) /nofor_main
     FFLAGS=-fpp -warn=all -module=${moddir} -static-intel -mp1 -stand=f23 -warn=nounused $(DEFINES) $(FINCLUDES)
     ifeq ($(WITH_CHECKS),true)
       FFLAGS+=-check=all -check=noarg_temp_created
     endif
     FFLAGS+=-real-size=64 -fpscomp
-#   FLIBS+=-L"${CMPLR_ROOT}/lib"
-#   FLIBS+=-lifcore -lsvml_dispmt -lifport
-#   FLIBS+=-lmmds -lircmt -liomp5md -lifport
-#   FLIBS+=-lifmodintr -lbufferoverflow -lifconsol -lgcc
   else
     FFLAGS=-fpp -warn all -module ${moddir} -static-intel -mp1 -stand f23 -warn nounused $(DEFINES) $(FINCLUDES)
+    LINK=$(FC) -nofor-main
     ifeq ($(WITH_CHECKS),true)
       FFLAGS+=-check all -check=noarg_temp_created
     endif
@@ -262,7 +258,6 @@ else ifeq ($(F90),ifx)
     FLIBS+=-limf -lintlc -liomp5 -lifport
   endif
 else ifeq ($(F90),flang)
-# LINK=$(FC) -fno-fortran-main
   LINK=$(CC)
   DEBUG_FFLAGS=-g -DDEBUG=1
   OPT_FFLAGS=-O3
@@ -285,7 +280,7 @@ else
   FFLAGS+=-fdefault-real-8 -fdefault-double-8
   OMPFLAG=-fopenmp
   FLIBS+=-lgfortran -lgomp
-  EXTFFLAGS+=-Wno-unused-dummy-argument -Wno-unused-value
+ #EXTFFLAGS+=-Wno-unused-dummy-argument -Wno-unused-value
 endif
 
 ifeq ($(F90),ifx)
@@ -323,27 +318,35 @@ ifneq ($(NETCDFLIB),)
   LIBS+=-L$(NETCDFLIB)
 endif
 
-
 ifeq ($(PLOTDIR),)
   PLOTDIR=../../libplot
 endif
 
-RES=
-RESP=
-ifeq ($(WITH_PLOTS),true)
-  LIBS+=-L$(PLOTDIR)/lib -lplot -lgd
+PLOTLIBS=-L$(PLOTDIR)/lib -lplot -lgd
+ifeq ($(OSTYPE),Darwin)
+  XLIBS+=-framework Cocoa
+else ifeq ($(OSTYPE),Msys)
+  XLIBS+=-lgdi32
+else
+  XLIBS+=-lX11
+endif
+ifdef AEDDEVDIR
+  LIBS+=$(PLOTLIBS) $(XLIBS)
+else ifeq ($(WITH_PLOTS),true)
+  LIBS+=$(PLOTLIBS)
   ifeq ($(WITH_XPLOTS),true)
-    ifeq ($(OSTYPE),Darwin)
-      LIBS+=-framework Cocoa
-    else ifeq ($(OSTYPE),Msys)
-      LIBS+=-lgdi32
-      RES=${objdir}/glm_rc.o
-      RESP=${objdir}/glm+_rc.o
-    else
-      LIBS+=-lX11
-    endif
+    LIBS+=$(XLIBS)
   endif
 endif
+
+ifeq ($(OSTYPE),Msys)
+  RES=${objdir}/glm_rc.o
+  RESP=${objdir}/glm+_rc.o
+else
+  RES=
+  RESP=
+endif
+
 ifeq ($(FENCE),true)
   LIBS+=-lefence
 endif
@@ -381,6 +384,7 @@ OBJS=${objdir}/glm_globals.o \
      ${objdir}/glm_debug.o \
      ${objdir}/glm_heatexchange.o \
      ${objdir}/glm_balance.o \
+     ${objdir}/glm_heatexchange.o \
      ${objdir}/glm_main.o
 
 ifeq ($(USE_DL),true)
@@ -389,24 +393,16 @@ ifeq ($(USE_DL),true)
   FFLAGS+=-DUSE_DL_LOADER=1
   TARGETS+=$(AEDTARGETS) $(FABMTARGETS)
 else
-  ifeq ($(AED),true)
-    OBJS+=${objdir}/glm_zones.o
-  else ifeq ($(FABM),true)
+  ifeq ($(WITH_AED),true)
     OBJS+=${objdir}/glm_zones.o
   endif
-  ifeq ($(AED2),true)
-    OBJS+=${objdir}/glm_aed2.o
-  endif
-  ifeq ($(API),true)
+  ifeq ($(WITH_API),true)
     OBJS+=${objdir}/glm_api_zones.o \
           ${objdir}/glm_api_aed.o
   endif
-  ifeq ($(AED),true)
+  ifeq ($(WITH_AED),true)
     OBJS+=${objdir}/glm_aed.o \
           ${objdir}/aed_external.o
-  endif
-  ifeq ($(FABM),true)
-    OBJS+=${objdir}/ode_solvers.o ${objdir}/glm_fabm.o
   endif
 endif
 
@@ -429,11 +425,11 @@ glm+: ${objdir} ${moddir} $(OBJS) $(GLM_DEPS) $(RESP)
 
 clean: ${objdir} ${moddir}
 	@touch ${objdir}/1.o ${moddir}/1.mod 1.t 1__genmod.f90 glm 1.${so_ext} glm_test_bird macos/glm.app macos/glm+.app
-	@touch debian/.debhelper debian/files
+	@touch debian/.debhelper debian/files debian/control
 	@touch debian/glm debian/glm.debhelper.log debian/glm.substvars
 	@touch debian/glm+ debian/glm+.debhelper.log debian/glm+.substvars
 	@/bin/rm ${moddir}/*.mod ${objdir}/*.o *.t *__genmod.f90 *.${so_ext} glm_test_bird
-	@/bin/rm -rf debian/.debhelper debian/files
+	@/bin/rm -rf debian/.debhelper debian/files debian/control
 	@/bin/rm -rf debian/glm debian/glm.debhelper.log debian/glm.substvars
 	@/bin/rm -rf debian/glm+ debian/glm+.debhelper.log debian/glm+.substvars
 	@echo Made clean

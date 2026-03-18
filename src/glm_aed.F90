@@ -11,7 +11,7 @@
 !#                                                                             #
 !#     http://aquatic.science.uwa.edu.au/                                      #
 !#                                                                             #
-!# Copyright 2013-2025 - The University of Western Australia                   #
+!# Copyright 2013-2026 : The University of Western Australia                   #
 !#                                                                             #
 !#  This file is part of GLM (General Lake Model)                              #
 !#                                                                             #
@@ -712,7 +712,6 @@ SUBROUTINE define_column(column, top)
             sv = sv + 1
             IF ( tvar%bot ) THEN
                column(av)%cell_sheet => cc(n_vars+sv, 1)
-!              print *,'av',av,sv
             ELSEIF ( tvar%top ) THEN
                column(av)%cell_sheet => cc(n_vars+sv, top)
             ENDIF
@@ -889,7 +888,6 @@ SUBROUTINE aed_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
          ENDIF
       ENDDO
    ENDIF
-!stop
 
    DO lev=1, wlev
       CALL aed_equilibrate(column, lev)
@@ -897,11 +895,12 @@ SUBROUTINE aed_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
 
    CALL check_states(wlev)
 
+   IF (benthic_mode .GT. 1) &
+      CALL calc_zone_areas(area, wlev, height(wlev))
+
    DO split=1,split_factor
-      IF (benthic_mode .GT. 1) THEN
-         CALL calc_zone_areas(area, wlev, height(wlev))
-         CALL copy_to_zone(cc, cc_diag, cc_diag_hz, wlev)
-      ENDIF
+      IF (benthic_mode .GT. 1) &
+         CALL copy_to_zone(cc, cc_diag, wlev)
 
       !# Update local light field (self-shading may have changed through
       !# changes in biological state variables). Update_light is set to
@@ -928,6 +927,7 @@ SUBROUTINE aed_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
 
          !# Distribute cc-sed benthic properties back into main cc array
          CALL copy_from_zone(n_aed_vars, cc, cc_diag, cc_diag_hz, wlev)
+
       ELSE
          cc(n_vars+1:n_vars+n_vars_ben, 1) = cc(n_vars+1:n_vars+n_vars_ben, 1) &
                                  + dt_eff*flux_ben(n_vars+1:n_vars+n_vars_ben)
@@ -968,12 +968,12 @@ CONTAINS
 !-------------------------------------------------------------------------------
 
    !############################################################################
-   SUBROUTINE define_zone_column(zon, top, bot)
+   SUBROUTINE define_zone_column(zon, top)
    !----------------------------------------------------------------------------
    ! Set up the current column pointers
    !----------------------------------------------------------------------------
    !ARGUMENTS
-      INTEGER, INTENT(in)  :: zon, top, bot
+      INTEGER, INTENT(in)  :: zon, top
    !
    !LOCALS
       INTEGER :: av
@@ -1041,7 +1041,7 @@ CONTAINS
             column_sed(av)%flux_atm => flux_atm(n_vars+sv)
          ELSE
             v = v + 1
-            column_sed(av)%cell => z_cc(v, :, zon)  ! GLM water layers above "zon" (set in copy_to_zone)
+            column_sed(av)%cell => z_cc(v, 1, :)  ! GLM water layers above "zon" (set in copy_to_zone)
             column_sed(av)%flux_atm => flux_atm(v)
             column_sed(av)%flux_pel => flux_pel(v, :)
             column_sed(av)%flux_ben => flux_ben(v)
@@ -1078,7 +1078,7 @@ CONTAINS
          !# water conditions need to be aggregated from multiple cells/layers
 
          DO zon=1,n_zones
-            CALL define_zone_column(zon, n_zones, 1)
+            CALL define_zone_column(zon, n_zones)
 
             theZones(zon)%z_sed_zones = zon  !MH TMP
 !           print *,'theZones(zon)%z_sed_zones',theZones(zon)%z_sed_zones !MH TMP
@@ -1161,7 +1161,7 @@ CONTAINS
 
 !$OMP DO
          DO zon=1,n_zones
-            CALL define_zone_column(zon, n_zones, 1)
+            CALL define_zone_column(zon, n_zones)
 
             !# Reinitialise flux_ben to be repopulated for this zone
             flux_ben = zero_
@@ -1289,7 +1289,6 @@ CONTAINS
          !# model configurations where mass balance of benthic variables is required.
 
          !# Calculate temporal derivatives due to exchanges at the sediment/water interface
-         IF ( zone_var >= 1 ) column(zone_var)%cell_sheet => theZones(1)%z_sed_zones
          CALL aed_calculate_benthic(column, 1)
 
          !# Limit flux out of bottom layers to concentration of that layer
@@ -1311,7 +1310,7 @@ CONTAINS
                !# & distribute bottom flux into pelagic over bottom box (i.e., divide by layer height).
                !# scaled to proportion of area that is "bottom"
                DO v=1,n_vars
-                 IF ( cc(v, lev) .GE. 0.0 ) flux_pel(v, lev) = &
+                  IF ( cc(v, lev) .GE. 0.0 ) flux_pel(v, lev) = &
                                    max(-1.0 * cc(v, lev), flux_pel(v, lev)/dz(lev))
                END DO
                flux_pel(:, lev) = flux_pel(:, lev) * (area(lev)-area(lev-1))/area(lev)
@@ -1334,6 +1333,7 @@ CONTAINS
       DO lev=1,wlev
          CALL aed_calculate(column, lev)
       ENDDO
+
    END SUBROUTINE calculate_fluxes
    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

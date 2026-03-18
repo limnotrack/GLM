@@ -11,7 +11,7 @@
 !#                                                                             #
 !#     http://aquatic.science.uwa.edu.au/                                      #
 !#                                                                             #
-!# Copyright 2024-2025 - The University of Western Australia                   #
+!# Copyright 2024-2026 : The University of Western Australia                   #
 !#                                                                             #
 !#  This file is part of GLM (General Lake Model)                              #
 !#                                                                             #
@@ -35,6 +35,8 @@
 #undef MISVAL
 
 #include "glm.h"
+
+#define _UNUSED(x) if (.FALSE.) print*,shape(x)
 
 !-------------------------------------------------------------------------------
 MODULE glm_api_aed
@@ -91,10 +93,10 @@ MODULE glm_api_aed
 !-------------------------------------------------------------------------------
 !MODULE DATA
 
-   AED_REAL :: par_fraction = 0.450
-   AED_REAL :: nir_fraction = 0.510
-   AED_REAL :: uva_fraction = 0.035
-   AED_REAL :: uvb_fraction = 0.005
+  !AED_REAL :: par_fraction = 0.450
+  !AED_REAL :: nir_fraction = 0.510
+  !AED_REAL :: uva_fraction = 0.035
+  !AED_REAL :: uvb_fraction = 0.005
 
    !# Arrays for state and diagnostic variables
    AED_REAL,DIMENSION(:,:),ALLOCATABLE,TARGET :: cc    !# water quality array - water  : nvars, nlayers
@@ -183,7 +185,7 @@ SUBROUTINE api_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
 
    TYPE(aed_coupling_t) :: conf
 
-   LOGICAL :: do_particle_bgc = .true. ! REMVE THIS LATER AND GET FROM GLOBALS
+   !LOGICAL :: do_particle_bgc = .true. ! REMVE THIS LATER AND GET FROM GLOBALS
 !
 !-------------------------------------------------------------------------------
 !BEGIN
@@ -213,6 +215,8 @@ SUBROUTINE api_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
    conf%Kw => Kw
 
    conf%do_particle_bgc = do_particle_bgc
+
+   conf%link_ext_par = link_ext_par
 
    CALL aed_set_coupling(conf)
 
@@ -328,7 +332,7 @@ SUBROUTINE api_set_glm_env()
    env(1)%longitude => longitude
    env(1)%latitude  => latitude
    env(1)%col_num   => col_num
-  
+
    env(1)%active    => actv !# .true.
 
    env(1)%longwave      => longwave
@@ -453,23 +457,15 @@ SUBROUTINE api_set_glm_ptm(num_particle_groups,num_particles)    BIND(C, name=_W
 !
 !-------------------------------------------------------------------------------
 !BEGIN
-print *,'HI0',num_particle_groups
 
    ALLOCATE(ptm_bla(num_particle_groups))
 
-print *,'HI'
-
    CALL aed_ptm_init(num_particle_groups,num_particles,ptm_bla,n_ptm_vars,MaxLayers)
-
-print *,'BYE', num_particles
-
 
   ! CALL set_c_ptmvars_ptr(cc)
    CALL set_c_ptmstat_ptr(ptm_istat)
    CALL set_c_ptmenv_ptr(ptm_env)
 
-   print *,'PTM : ', ptm_istat(1,5000,1)
-   print *,'PTM : ', ptm_env(1,5000,1)
 END SUBROUTINE api_set_glm_ptm
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -533,20 +529,23 @@ SUBROUTINE doMobilityF(N,dt,h,A,ww,min_C,mcc)
 !ARGUMENTS
    CINTEGER,INTENT(in)    :: N       !# number of vertical layers
    AED_REAL,INTENT(in)    :: dt      !# time step (s)
-   AED_REAL,INTENT(in)    :: h(*)    !# layer thickness (m)
-   AED_REAL,INTENT(in)    :: A(*)    !# layer areas (m2)
-   AED_REAL,INTENT(in)    :: ww(*)   !# vertical speed (m/s)
+   AED_REAL,INTENT(in)    :: h(:)    !# layer thicknesses (m)
+   AED_REAL,INTENT(in)    :: A(:)    !# layer areas (m2)
+   AED_REAL,INTENT(in)    :: ww(:)   !# vertical speed (m/s)
    AED_REAL,INTENT(in)    :: min_C   !# minimum allowed cell concentration
-   AED_REAL,INTENT(inout) :: mcc(*)  !# cell concentration
+   AED_REAL,INTENT(inout) :: mcc(:)  !# cell concentration
 !
 !LOCALS
-   CINTEGER :: NC
 !
 !-------------------------------------------------------------------------------
 !BEGIN
-   NC = N
-!  CALL doMobility(NC,dt,h,A,ww,min_C,mcc)
-   CALL doMobility(NC,dt,h,area,ww,min_C,mcc)
+   _UNUSED(A)
+
+!## The "Woods" example shows the problem.  Either version, "A" or "area" work with ifx
+!## but, with gfortran - using local copy "area" works, using passed array "A" doesnt
+!## Woods lake example Oxy and Oxy_sat NaN out with the A passed in.
+!  CALL doMobility(N,dt,h,A,ww,min_C,mcc)
+   CALL doMobility(N,dt,h,area,ww,min_C,mcc)
 END SUBROUTINE doMobilityF
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -717,7 +716,9 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
    TYPE(aed_variable_t),POINTER :: tv
 
    INTEGER  :: i, j, v, d, sv, sd
+#ifdef PLOTS
    INTEGER  :: z
+#endif
    AED_REAL :: val_out
    FLOGICAL :: last = .FALSE.
 !
@@ -736,6 +737,7 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
                   CALL store_nc_array(ncid, zexternalid(i), XYNT_SHAPE, n_zones, n_zones, array=z_diag_hz(sd,1:n_zones+1))
                ENDIF
                CALL store_nc_scalar(ncid, externalid(i), XYT_SHAPE, scalar=cc_diag_hz(sd))
+#ifdef PLOTS
                IF ( do_plots .AND. plot_id_sd(sd).GE.0 ) THEN
                   IF ( n_zones .GT. 0 ) THEN
                      DO z=1,n_zones
@@ -744,6 +746,7 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
                   ENDIF
                   CALL put_glm_val_s(plot_id_sd(sd),cc_diag_hz(sd))
                ENDIF
+#endif
                DO j=1,point_nlevs
                   val_out = missing
                   IF ((lvl(j) .EQ. wlev) .AND. tv%top) val_out = cc_diag(v, 1)
@@ -754,8 +757,10 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
                d = d + 1
                !# Store diagnostic variable values defined on the full domain.
                CALL store_nc_array(ncid, externalid(i), XYZT_SHAPE, wlev, nlev, array=cc_diag(d, :))
+#ifdef PLOTS
                IF ( do_plots .AND. plot_id_d(d).GE.0 ) &
                   CALL put_glm_val(plot_id_d(d), cc_diag(d, 1:wlev))
+#endif
                DO j=1,point_nlevs
                   IF (lvl(j) .GE. 0) THEN ; val_out = cc_diag(d, lvl(j)+1)
                   ELSE                    ; val_out = missing     ; ENDIF
@@ -771,6 +776,7 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
                   CALL store_nc_array(ncid, zexternalid(i), XYNT_SHAPE, n_zones, n_zones, array=z_cc_hz(sv, 1:n_zones))
                ENDIF
                CALL store_nc_scalar(ncid, externalid(i), XYT_SHAPE, scalar=cc_hz(sv))
+#ifdef PLOTS
                IF ( do_plots .AND. plot_id_sv(sv).GE.0 ) THEN
                   IF ( n_zones .GT. 0 ) THEN
                      DO z=1,n_zones
@@ -779,6 +785,7 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
                   ENDIF
                   CALL put_glm_val_s(plot_id_sv(sv), cc_hz(sv))
                ENDIF
+#endif
                DO j=1,point_nlevs
                   val_out = missing
                   IF ((lvl(j) .EQ. wlev) .AND. tv%top) val_out = cc_hz(sv)
@@ -789,7 +796,9 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
                v = v + 1
                !# Store pelagic biogeochemical state variables.
                CALL store_nc_array(ncid, externalid(i), XYZT_SHAPE, wlev, nlev, array=cc(v, :))
+#ifdef PLOTS
                IF ( do_plots .AND. plot_id_v(v).GE.0 ) CALL put_glm_val(plot_id_v(v), cc(v, 1:wlev))
+#endif
                DO j=1,point_nlevs
                   IF (lvl(j) .GE. 0) THEN ; val_out = cc(v, lvl(j)+1)
                   ELSE                    ; val_out = missing     ; ENDIF

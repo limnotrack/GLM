@@ -9,7 +9,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -252,8 +252,10 @@ CLOGICAL littoral_sw        = FALSE;
 CLOGICAL ptm_sw = FALSE;
 int max_particle_num = 10000;  //# max number of particles
 ParticleDataType *Particle = NULL;
+AED_REAL particle_density = 1000.;
+AED_REAL particle_diameter = 1e-6;
 AED_REAL settling_velocity = 0.;
-CLOGICAL do_particle_bgc = FALSE;
+//CLOGICAL do_particle_bgc = FALSE;
 int init_particle_num = 10;
 AED_REAL settling_efficiency = 1.;
 AED_REAL *inflow_conc = 0;    //# number of particles per cubic meter in the inflow

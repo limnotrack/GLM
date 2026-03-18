@@ -11,7 +11,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -72,7 +72,9 @@ void wq_write_glm(int ncid, int wlev, int nlev, int *lvl, int point_nlevs)
 
 extern AED_REAL XLW, XCO, XEV, QSW;
 
+#ifdef PLOTS
 static int plot_id[16];
+#endif
 
 /******************************************************************************
  * Initialise output streams                                                  *
@@ -320,7 +322,7 @@ void write_output(int jday, int iclock, int nsave, int stepnum)
                 write_csv_point_avg(i, "temp", NULL, NULL, FALSE);
                 write_csv_point_avg(i, "salt", NULL, NULL, FALSE);
                 write_csv_point_avg(i, "dens", NULL, NULL, FALSE);
-            } else {
+            } else if ( lvl[i] >= 0 ) {
                 write_csv_point(i, "temp", Lake[lvl[i]].Temp,     NULL, FALSE);
                 write_csv_point(i, "salt", Lake[lvl[i]].Salinity, NULL, FALSE);
                 write_csv_point(i, "dens", Lake[lvl[i]].Density,  NULL, FALSE);

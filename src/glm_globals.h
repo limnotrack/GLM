@@ -9,7 +9,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -318,11 +318,12 @@ extern CLOGICAL littoral_sw;
 extern CLOGICAL ptm_sw;
 extern int max_particle_num;   //# number of particles
 extern ParticleDataType *Particle;
+extern AED_REAL particle_density;
+extern AED_REAL particle_diameter;
 extern AED_REAL settling_velocity;
-extern CLOGICAL do_particle_bgc;
 extern int init_particle_num;
 extern AED_REAL settling_efficiency;
-extern AED_REAL *inflow_conc;    //# concentration of particles per ?? in the inflow
+extern AED_REAL *inflow_conc;  //# concentration of particles per ?? in the inflow
 
 extern partgroup *Particles;
 
@@ -345,9 +346,9 @@ extern AED_REAL heat_pump_current_heat_flux; //# current dynamic heat flux from 
 
 /*----------------------------------------------------------------------------*/
 // DEBUGGING
-extern CLOGICAL dbg_mix;  //# debug output from mixer
-extern CLOGICAL no_evap;  //# turn off evaporation
-extern int     quiet;     //# turn down output messages
+extern CLOGICAL dbg_mix;   //# debug output from mixer
+extern CLOGICAL no_evap;   //# turn off evaporation
+extern int      quiet;     //# turn down output messages
 
 /*----------------------------------------------------------------------------*/
 // C-Fortran shared (see glm_types.F90
@@ -372,6 +373,8 @@ extern FLOGICAL link_rain_loss;
 extern FLOGICAL link_solar_shade;
 extern FLOGICAL link_bottom_drag;
 extern FLOGICAL ice;
+extern FLOGICAL do_particle_bgc;
+extern FLOGICAL link_ext_par;
 
 extern CINTEGER split_factor;
 extern CINTEGER ode_method;
@@ -384,8 +387,6 @@ extern AED_REAL friction;
 extern AED_REAL Kw;
 extern AED_REAL dt;
 
-extern AED_REAL yearday;
-extern AED_REAL timestep;
 extern AED_REAL Longitude;
 extern AED_REAL Latitude;
 
@@ -399,7 +400,7 @@ void debug_print_lake(void);
 void debug_initialisation(int which);
 void debug_initialisation_(int *which);
 
-//# NB: The order of array indeices has been reversed as of V4 
+//# NB: The order of array indices has been reversed as of V4
 // #  define _WQ_Vars(var,lyr) WQ_Vars[_IDX_2d(MaxLayers,Tot_WQ_Vars,lyr,var)]
 // //#define _WQS_Vars(var,lyr) WQ_Vars[_IDX_2d(MaxLayers,Tot_WQ_Vars,lyr,var)]
 // #  define _WQD_Vars(var,lyr) WQD_Vars[_IDX_2d(MaxLayers,Num_WQD_Vars,lyr,var)]

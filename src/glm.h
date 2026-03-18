@@ -9,7 +9,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -35,8 +35,7 @@
 #endif
 #define USE_FILLVALUE 1
 
-/* Actually pre-alpha V4.0.0 */
-#define GLM_VERSION  "3.9.102"
+#define GLM_VERSION  "3.9.106"
 
 #define POINT         0
 #define Z_SHAPE       1
@@ -71,6 +70,7 @@
 #  define CINTEGER INTEGER(kind=C_INT32_T)
 #  define CSIZET   INTEGER(kind=C_SIZE_T)
 #  define FLOGICAL LOGICAL(kind=C_BOOL)
+#  define CLOGICAL LOGICAL(kind=C_BOOL)
 #  define CCHARACTER CHARACTER(C_CHAR)
 
 #  define stdin  5
@@ -119,6 +119,7 @@
     #define strcasecmp _stricmp
     #define strncasecmp _strnicmp
     double fmod(double x, double y);
+    char *ctime_r(const time_t *t, char *b);
   #endif
 
   #if DEBUG

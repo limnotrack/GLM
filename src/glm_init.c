@@ -9,7 +9,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -157,6 +157,7 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "bioshade_feedback", TYPE_BOOL,             &bsf                  },
           { "repair_state",      TYPE_BOOL,             &rs                   },
           { "mobility_off",      TYPE_BOOL,             &mo                   },
+          { "link_ext_par",      TYPE_BOOL,             &link_ext_par         },
           { NULL,                TYPE_END,              NULL                  }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
@@ -537,7 +538,7 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     /*-- %%END NAMELIST ------------------------------------------------------*/
 
     /*-- %%NAMELIST sediment -------------------------------------------------*/
-//  int              benthic_mode;
+//  extern int       benthic_mode;
 //  int              n_zones;
     AED_REAL        *zone_heights = NULL;
     extern CLOGICAL  sed_heat_sw;
@@ -596,9 +597,11 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     extern AED_REAL  init_depth_max;
     extern AED_REAL  ptm_time_step;
     extern AED_REAL  ptm_diffusivity;
+    extern AED_REAL  particle_density;
+    extern AED_REAL  particle_diameter;
     extern AED_REAL  settling_velocity;
     extern AED_REAL  settling_efficiency;
-    extern CLOGICAL  do_particle_bgc;
+//  extern CLOGICAL  do_particle_bgc;
     //==========================================================================
     NAMELIST particles[] = {
           { "particles",         TYPE_START,            NULL                  },
@@ -612,6 +615,8 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "init_depth_max",    TYPE_DOUBLE,           &init_depth_max       },
           { "ptm_time_step",     TYPE_DOUBLE,           &ptm_time_step        },
           { "ptm_diffusivity",   TYPE_DOUBLE,           &ptm_diffusivity      },
+          { "particle_density",  TYPE_DOUBLE,           &particle_density     },
+          { "particle_diameter", TYPE_DOUBLE,           &particle_diameter    },
           { "settling_velocity", TYPE_DOUBLE,           &settling_velocity    },
           { "settling_efficiency", TYPE_DOUBLE,         &settling_efficiency  },
           { "do_particle_bgc",   TYPE_BOOL,             &do_particle_bgc      },
@@ -713,6 +718,7 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
         repair_state      = FALSE;
         mobility_off      = FALSE;
         n_zones           = 0;
+        link_ext_par	  = TRUE;
     } else {
         ode_method        = lode_method;
         split_factor      = lsplit_factor;
@@ -1136,7 +1142,6 @@ for (i = 0; i < n_zones; i++) {
         }
 
         for (i = 0; i < NumOut; i++) {
-            
             // Outlet_type
             if ( outlet_type != NULL ) {
                 if ( outlet_type[i] >= 1 && outlet_type[i] <= 6 ) {
@@ -1180,7 +1185,7 @@ for (i = 0; i < n_zones; i++) {
             // Initialize submerged outflow parameters for Type 6
             Outflows[i].SubmElev = (subm_elev_outflow != NULL) ? subm_elev_outflow[i] : 0.0;
             Outflows[i].SubmElevDynamic = (elev_idx_outflow != NULL && elev_idx_outflow[i] >= 0);
-            
+
             // Initialize WQ_Outflow to NULL initially (will be allocated later if needed)
             Outflows[i].WQ_Outflow = NULL;
 

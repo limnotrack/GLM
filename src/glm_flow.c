@@ -9,7 +9,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -154,14 +154,14 @@ void do_single_outflow(AED_REAL HeightOfOutflow, AED_REAL flow, OutflowDataType 
         outf-> DrawnFrom = i;                                               // Store the layer index (i) where water was last drawn from for this outflow
 
         // Collect WQ variables from the layer being drawn from Type 6 outflow
-        if (outf->Type == 6 && WQ_Vars != NULL && Num_WQ_Vars > 0) {        
-            int wqidx;                                                      
-            for (wqidx = 0; wqidx < Num_WQ_Vars; wqidx++) {                 
-                if (outf->WQ_Outflow != NULL && i >= 0 && i < MaxLayers) {  
-                    outf->WQ_Outflow[wqidx] = _WQ_Vars(wqidx, i);           
-                }                                                           
-            }                                                               
-        }                                                                   
+        if (outf->Type == 6 && WQ_Vars != NULL && Num_WQ_Vars > 0) {
+            int wqidx;
+            for (wqidx = 0; wqidx < Num_WQ_Vars; wqidx++) {
+                if (outf->WQ_Outflow != NULL && i >= 0 && i < MaxLayers) {
+                    outf->WQ_Outflow[wqidx] = _WQ_Vars(wqidx, i);
+                }
+            }
+        }
     }
 
     WidthAtOutflow = 0.;
@@ -492,8 +492,8 @@ AED_REAL do_outflows(int jday, AED_REAL day_fraction)
 
         //Heat_pump captures the outflow
         if (heat_pump_switch > 0 && i == heat_pump_outflow_idx) {
-            // Use ACTUAL withdrawn volume, not requested (accounts for layer correction)
-            AED_REAL qout = tVolSum - Lake[surfLayer].Vol1;   /* m3/day - actual volume removed */
+            // substep discharge
+            AED_REAL qout = Outflows[i].Draw;   /* m3/day */
             // find the layer that has the withdrawal elevation
             int lvl;
             for (lvl = botmLayer; lvl <= surfLayer; ++lvl) {   //Look up and finds withdrawl elevation

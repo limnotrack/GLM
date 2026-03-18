@@ -11,7 +11,7 @@
  *                                                                            *
  *     http://aquatic.science.uwa.edu.au/                                     *
  *                                                                            *
- * Copyright 2013-2025 - The University of Western Australia                  *
+ * Copyright 2013-2026 : The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -96,9 +96,6 @@ static void dummy_inflow_update(AED_REAL *wqinf, int *nwqVars, AED_REAL *temp, A
  ******************************************************************************/
 int prime_wq(const char *which)
 {
-#ifndef PLOTS
-    CLOGICAL do_plots = FALSE;
-#endif
     glm_init_fortran_support();
 #if USE_DL_LOADER
     char dirname[1024];
