@@ -70,7 +70,7 @@ void heat_pump_capture_outflow(int jday, AED_REAL DrawHeight, AED_REAL vol, AED_
     print_counter++;  // Track capture events for printing
 }
 /*************************************************************************************
- * Insert heat pump water directly and trigger density-driven mixing                 *
+ * Insert heat pump water directly                *
  * Called AFTER do_outflows() in glm_model.c for mass conservation                   *
  *************************************************************************************/
 void heat_pump_insert_inflow() 
