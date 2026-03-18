@@ -347,8 +347,6 @@ void do_model(int jstart, int nsave)
             }
             wq_inflow_update(Inflows[i].WQInf, &Num_WQ_Vars, &Inflows[i].TemInf, &Inflows[i].SalInf);
         }
-        // Heat pump insert the captured values from outflow (AFTER averaging to avoid overwrite)
-        heat_pump_insert_inflow();
 
         //# Read & set today's outflow properties
         read_daily_outflow(jday, NumOut, DrawNew, ElevOut, HeatFluxOut, NULL);
@@ -402,7 +400,17 @@ void do_model(int jstart, int nsave)
         SurfData.dailyInflow = do_inflows(); //# Do inflow for all streams
 
         //# Extract withdrawal from all offtakes
-        SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+        //# Skip if subdaily heat pump is active (already processed hourly in loop)
+        if (!(subdaily && heat_pump_switch > 0)) {
+            SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+        }
+
+        //# Heat pump: inject water after outflows for mass conservation
+        //# Only execute if NOT in subdaily mode (subdaily handles it in the loop)
+        //# Note: Density instabilities will be resolved in the next timestep's mixing
+        if (!(subdaily && heat_pump_switch > 0)) {
+            heat_pump_insert_inflow();
+        }
 
         //# Take care of any overflow
         SurfData.dailyOverflow = do_overflow(jday, day_fraction);
@@ -581,7 +589,17 @@ void do_model_non_avg(int jstart, int nsave)
 
         if (Lake[surfLayer].Vol1 > zero) {
            //# Extract withdrawal from all offtakes
-           SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+           //# Skip if subdaily heat pump is active (already processed hourly in loop)
+           if (!(subdaily && heat_pump_switch > 0)) {
+               SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+           }
+
+           //# Heat pump: inject water after outflows for mass conservation
+           //# Only execute if NOT in subdaily mode (subdaily handles it in the loop)
+           //# Note: Density instabilities will be resolved in the next timestep's mixing
+           if (!(subdaily && heat_pump_switch > 0)) {
+               heat_pump_insert_inflow();
+           }
 
            //# Take care of any overflow
            SurfData.dailyOverflow = do_overflow(jday, day_fraction);
@@ -887,6 +905,30 @@ int do_subdaily_loop(int stepnum, int jday, int stoptime, int nsave, AED_REAL SW
          *## Start Water Quality calls                                        *
          **********************************************************************/
         if (wq_calc) wq_do_glm(&NumLayers);
+
+        /**********************************************************************
+         *## Heat pump operations at subdaily timestep (if enabled)           *
+         **********************************************************************/
+        if (subdaily && heat_pump_switch > 0) {
+            // Scale outflow rates for subdaily timestep
+            AED_REAL saved_draws[MaxOut];
+            for (int i = 0; i < NumOut; i++) {
+                saved_draws[i] = Outflows[i].Draw;
+                Outflows[i].Draw = saved_draws[i] * part_day_per_step;
+            }
+            
+            // Process outflows at subdaily timestep (captures heat pump extraction)
+            AED_REAL timestep_outflow = do_outflows(jday, part_day_per_step);
+            SurfData.dailyOutflow += timestep_outflow; // Accumulate for daily reporting
+            
+            // Restore original outflow rates for next subdaily step
+            for (int i = 0; i < NumOut; i++) {
+                Outflows[i].Draw = saved_draws[i];
+            }
+            
+            // Inject heat pump water - density instabilities will be resolved in next subdaily step
+            heat_pump_insert_inflow();
+        }
 
         //# If an output write is requested for the last time step of the day
         //# then do not output in the subdaily.  Output writing is moved to the

@@ -115,7 +115,7 @@ void ptm_init_glm()
     printf("ptm_init_glm: num_particle_groups  %d \n",num_particle_groups);
 
     //NEW allocate AED ptm data structures, and GLM pointers
-    api_set_glm_ptm(&num_particle_groups,&max_particle_num);   //_WQ_SET_GLM_PTM
+    // api_set_glm_ptm(&num_particle_groups,&max_particle_num);   //_WQ_SET_GLM_PTM // Temporarily commented out
 
     printf("_PTM_Stat(0,5000-1,0)  %d \n" ,_PTM_Stat(0,5000-1,0));
     printf("_PTM_Stat(0,5000-1,1)  %d \n"  ,_PTM_Stat(0,5000-1,1));

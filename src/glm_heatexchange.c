@@ -14,11 +14,13 @@
 
 #include <stdio.h>
 #include <math.h>
+#include "glm.h"
 #include "glm_types.h" 
 #include "glm_const.h"
 #include "glm_globals.h"
 #include "glm_util.h"
 #include "glm_input.h"
+#include "glm_mixu.h"
 
 // Storage for intercepted outflow
 static AED_REAL stored_flow_rate  = 0.0;
@@ -68,7 +70,8 @@ void heat_pump_capture_outflow(int jday, AED_REAL DrawHeight, AED_REAL vol, AED_
     print_counter++;  // Track capture events for printing
 }
 /*************************************************************************************
- * Insert previously stored flow (heat pump backflow) (called in glm_model.c l. 350) *
+ * Insert heat pump water directly and trigger density-driven mixing                 *
+ * Called AFTER do_outflows() in glm_model.c for mass conservation                   *
  *************************************************************************************/
 void heat_pump_insert_inflow() 
 {
@@ -82,109 +85,111 @@ void heat_pump_insert_inflow()
     if (heat_pump_inflow_idx < 0 || heat_pump_inflow_idx >= NumInf) {
         printf("ERROR: heat_pump_inflow_idx (%d) is out of range [0, %d]\n", 
                heat_pump_inflow_idx, NumInf-1);
-
         return;
     }
 
     // Calculate temperature change caused by the heat pump
     AED_REAL heated_temp;
+    AED_REAL temp_change_value;
     
     switch (heat_pump_switch) {
         case 1: {
             // Mode 1: Fixed temperature increase (defined in .nml file)
-            heated_temp = stored_temp - heat_pump_temp_change;
+            temp_change_value = heat_pump_temp_change;
+            heated_temp = stored_temp - temp_change_value;
             break;
         }
         case 2: {
-            // Mode 2:  heat flux-based dT calculation
+            // Mode 2: heat flux-based dT calculation
             AED_REAL flow_rate_m3s = stored_flow_rate / SecsPerDay; // m³/day to m³/s
             // Use dynamic heat flux if available, otherwise use static value
             AED_REAL current_heat_flux = (heat_pump_dynamic_heat_flux != 0.0) ? 
                                         heat_pump_dynamic_heat_flux : heat_pump_heat_flux;
             // ΔT = Q_heat / (ρ × Q_flow × c) Units: W / (kg/m³ × m³/s × J/(kg·K)) = J/s / (kg/s × J/(kg·K)) = K
-            AED_REAL temp_change = current_heat_flux / (rho0 * flow_rate_m3s * SPHEAT);
-            heated_temp = stored_temp - temp_change;
+            temp_change_value = current_heat_flux / (rho0 * flow_rate_m3s * SPHEAT);
+            heated_temp = stored_temp - temp_change_value;
             break;
         }
         default: {
             // Default to mode 1 behavior for backward compatibility
-            heated_temp = stored_temp - heat_pump_temp_change;
+            temp_change_value = heat_pump_temp_change;
+            heated_temp = stored_temp - temp_change_value;
             break;
         }
     }
    
-    // Modify the specified inflow to inject heated water at specified depth
-    if (NumInf > 0) {
-        
-        // Assign flow, temp, salt, and submerged elevation
-        Inflows[heat_pump_inflow_idx].FlowRate = stored_flow_rate;
-        Inflows[heat_pump_inflow_idx].TemInf   = heated_temp;
-        Inflows[heat_pump_inflow_idx].SalInf   = stored_salt + 0.5;                
-        Inflows[heat_pump_inflow_idx].Factor   = 1.0;
+    // Get the injection elevation from the inflow configuration
+    AED_REAL inject_elev = Inflows[heat_pump_inflow_idx].SubmElev;
+    
+    // Find the layer at injection elevation
+    int Layer_inject;
+    for (Layer_inject = botmLayer; Layer_inject <= surfLayer; Layer_inject++) {
+        if (Lake[Layer_inject].Height >= inject_elev) break;
+    }
+    if (Layer_inject > surfLayer) Layer_inject = surfLayer;
+    
+    // Calculate density of injected water
+    AED_REAL inject_density = calculate_density(heated_temp, stored_salt);
+    
+    // Directly inject into the lake layer
+    // This combines the injected water properties with the existing layer
+    Lake[Layer_inject].Temp = combine(Lake[Layer_inject].Temp, Lake[Layer_inject].LayerVol, Lake[Layer_inject].Density,
+                                      heated_temp, stored_flow_rate, inject_density);
+    Lake[Layer_inject].Salinity = combine(Lake[Layer_inject].Salinity, Lake[Layer_inject].LayerVol, Lake[Layer_inject].Density,
+                                          stored_salt, stored_flow_rate, inject_density);
 
-        // Assign WQ variables
-        if (Num_WQ_Vars > 0) {
-            for (int wqidx = 0; wqidx < Num_WQ_Vars; wqidx++) {
-
-                Inflows[heat_pump_inflow_idx].WQInf[wqidx] = stored_WQ[wqidx];
-            }
-        }
-
-        // Minimal status output every 200 days to show dynamic heat flux changes
-        if (print_counter % 200 == 0) {
-            // First show extraction info
-            if (heat_pump_outflow_idx >= 0 && heat_pump_outflow_idx < NumOut) {
-                const char* outflow_type = (Outflows[heat_pump_outflow_idx].SubmElevDynamic) ? "dynamic" : "static";
-                printf("Heat pump extracting at jday %d: Q=%8.4f m³/d, elev=%5.1f m[%s], T=%5.1f°C\n", 
-                       stored_jday, stored_flow_rate, stored_Drawheight, outflow_type, stored_temp);
-            } else {
-                printf("Heat pump extracting at jday %d: Q=%8.4f m³/d, elev=%5.1f m[UNKNOWN], T=%5.1f°C\n", 
-                       stored_jday, stored_flow_rate, stored_Drawheight, stored_temp);
-            }
-            
-            // Then show injection info
-            if (heat_pump_inflow_idx >= 0 && heat_pump_inflow_idx < NumInf) {
-                const char* inflow_type = (Inflows[heat_pump_inflow_idx].SubmElevDynamic) ? "dynamic" : "static";
-                // Show different output based on heat pump mode
-                if (heat_pump_switch == 1) {
-                    printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, elev=%5.1f m[%s], T=%5.1f°C (ΔT=%+6.2f°C)\n",
-                           stored_jday, stored_flow_rate, Inflows[heat_pump_inflow_idx].SubmElev, inflow_type, heated_temp, heat_pump_temp_change);
-                } else if (heat_pump_switch == 2) {
-                    AED_REAL temp_change = heated_temp - stored_temp;
-                    AED_REAL current_heat_flux = (heat_pump_dynamic_heat_flux != 0.0) ? 
-                                                heat_pump_dynamic_heat_flux : heat_pump_heat_flux;
-                    printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, elev=%5.1f m[%s], T=%5.1f°C (ΔT=%+6.3f°C, %5.0fW)\n",
-                           stored_jday, stored_flow_rate, Inflows[heat_pump_inflow_idx].SubmElev, inflow_type, heated_temp, temp_change, current_heat_flux);
-                } else {
-                    printf("Heat pump (unknown) injecting at jday %d: Q=%8.4f m³/d, elev=%5.1f m[%s], T=%5.1f°C\n",
-                           stored_jday, stored_flow_rate, Inflows[heat_pump_inflow_idx].SubmElev, inflow_type, heated_temp);
-                }
-            } else {
-                if (heat_pump_switch == 1) {
-                    printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, T=%5.1f°C (ΔT=%+6.2f°C)                [inflow=INVALID]\n",
-                           stored_jday, stored_flow_rate, heated_temp, heat_pump_temp_change);
-                } else if (heat_pump_switch == 2) {
-                    AED_REAL temp_change = heated_temp - stored_temp;
-                    AED_REAL current_heat_flux = (heat_pump_dynamic_heat_flux != 0.0) ? 
-                                                heat_pump_dynamic_heat_flux : heat_pump_heat_flux;
-                    printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, T=%5.1f°C (ΔT=%+6.3f°C, %5.0fW)        [inflow=INVALID]\n",
-                           stored_jday, stored_flow_rate, heated_temp, temp_change, current_heat_flux);
-                } else {
-                    printf("Heat pump (unknown) injecting at jday %d: Q=%8.4f m³/d, T=%5.1f°C                     [inflow=INVALID]\n",
-                           stored_jday, stored_flow_rate, heated_temp);
-                }
-            }
-            
-            // Show all WQ variables if available
-            if (Num_WQ_Vars > 0) {
-                printf("  Injected WQ: ");
-                for (int i = 0; i < Num_WQ_Vars; i++) {
-                    printf("WQ[%d]=%.6f ", i, Inflows[heat_pump_inflow_idx].WQInf[i]);
-                }
-            }
+    // Inject WQ variables
+    if (Num_WQ_Vars > 0 && WQ_Vars != NULL) {
+        for (int wqidx = 0; wqidx < Num_WQ_Vars; wqidx++) {
+            _WQ_Vars(wqidx, Layer_inject) = combine_vol(_WQ_Vars(wqidx, Layer_inject), Lake[Layer_inject].LayerVol,
+                                                        stored_WQ[wqidx], stored_flow_rate);
         }
     }
 
+    // Update layer density after mixing
+    Lake[Layer_inject].Density = calculate_density(Lake[Layer_inject].Temp, Lake[Layer_inject].Salinity);
+    
+    // Add the volume back to the layer (mass conservation: outflow removed it, now we add it back)
+    Lake[Layer_inject].LayerVol = Lake[Layer_inject].LayerVol + stored_flow_rate;
+
+    // Update cumulative volumes
+    Lake[botmLayer].Vol1 = Lake[botmLayer].LayerVol;
+    if (surfLayer != botmLayer) {
+        for (int j = (botmLayer + 1); j <= surfLayer; j++) {
+            Lake[j].Vol1 = Lake[j-1].Vol1 + Lake[j].LayerVol;
+        }
+    }
+
+    // Recalculate layer heights from volumes (required for consistency)
+    resize_internals(2, botmLayer);
+
+    // Status output for monitoring
+    print_counter++;
+    if (print_counter % 200 == 0) {
+        // Show extraction info
+        if (heat_pump_outflow_idx >= 0 && heat_pump_outflow_idx < NumOut) {
+            const char* outflow_type = (Outflows[heat_pump_outflow_idx].SubmElevDynamic) ? "dynamic" : "static";
+            printf("Heat pump extracting at jday %d: Q=%8.4f m³/d, elev=%5.1f m[%s], T=%5.1f°C\n", 
+                   stored_jday, stored_flow_rate, stored_Drawheight, outflow_type, stored_temp);
+        } else {
+            printf("Heat pump extracting at jday %d: Q=%8.4f m³/d, elev=%5.1f m[UNKNOWN], T=%5.1f°C\n", 
+                   stored_jday, stored_flow_rate, stored_Drawheight, stored_temp);
+        }
+        
+        // Show injection info  
+        if (heat_pump_switch == 1) {
+            printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, elev=%5.1f m, T=%5.1f°C (ΔT=%+6.2f°C)\n",
+                   stored_jday, stored_flow_rate, inject_elev, heated_temp, -temp_change_value);
+        } else if (heat_pump_switch == 2) {
+            AED_REAL current_heat_flux = (heat_pump_dynamic_heat_flux != 0.0) ? 
+                                        heat_pump_dynamic_heat_flux : heat_pump_heat_flux;
+            printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, elev=%5.1f m, T=%5.1f°C (ΔT=%+6.3f°C, %5.0fW)\n",
+                   stored_jday, stored_flow_rate, inject_elev, heated_temp, -temp_change_value, current_heat_flux);
+        }
+    }
+    
+    // Clear stored data after injection to prevent double injection
+    stored_flow_rate = 0.0;
 }
 
 /***********************************************************
@@ -237,11 +242,20 @@ void check_heat_pump_config()
                    heat_pump_outflow_idx, NumOut-1);
         }
         
-        // Ensure heat pump inflow is configured as submerged with dynamic elevation 
+        // Configure heat pump inflow to use plunge dynamics (NOT submerged)
+        // This allows cooler/denser water to find its neutral buoyancy level
         if (heat_pump_inflow_idx >= 0 && heat_pump_inflow_idx < NumInf) {
-            Inflows[heat_pump_inflow_idx].SubmFlag        = TRUE;
-            Inflows[heat_pump_inflow_idx].SubmElevDynamic = TRUE;
-            
+            Inflows[heat_pump_inflow_idx].SubmFlag        = FALSE;  // Use plunge dynamics
+            Inflows[heat_pump_inflow_idx].SubmElevDynamic = FALSE;
+        }
+        
+        // For outflow: respect the nml configuration (don't force dynamic)
+        // If you want static extraction, ensure elev_idx_outflow is NOT set in .nml
+        if (heat_pump_outflow_idx >= 0 && heat_pump_outflow_idx < NumOut) {
+            // Debug: show what was read from nml
+            printf("Heat pump outflow %d: SubmElevDynamic = %s (from .nml)\n",
+                   heat_pump_outflow_idx,
+                   Outflows[heat_pump_outflow_idx].SubmElevDynamic ? "TRUE (dynamic)" : "FALSE (static)");
         }
     } else {
         printf("Heat pump disabled (heat_pump_switch = %d)\n", heat_pump_switch);

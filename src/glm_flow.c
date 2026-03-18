@@ -492,8 +492,8 @@ AED_REAL do_outflows(int jday, AED_REAL day_fraction)
 
         //Heat_pump captures the outflow
         if (heat_pump_switch > 0 && i == heat_pump_outflow_idx) {
-            // substep discharge
-            AED_REAL qout = Outflows[i].Draw;   /* m3/day */
+            // Use ACTUAL withdrawn volume, not requested (accounts for layer correction)
+            AED_REAL qout = tVolSum - Lake[surfLayer].Vol1;   /* m3/day - actual volume removed */
             // find the layer that has the withdrawal elevation
             int lvl;
             for (lvl = botmLayer; lvl <= surfLayer; ++lvl) {   //Look up and finds withdrawl elevation
