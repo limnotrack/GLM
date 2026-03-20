@@ -187,6 +187,9 @@ ifeq ($(WITH_AED),true)
     ifdef PHREEQDIR
        AEDLIBS+=-L$(PHREEQDIR)/build -lPhreeqcRM
     endif
+    ifdef MODFLOWDIR
+       AEDLIBS+=-L$(MODFLOWDIR)/build/srcbmi -lmf6
+    endif
   else
     EXTFFLAGS+=-DNO_DEV
   endif
