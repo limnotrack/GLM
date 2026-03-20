@@ -382,7 +382,6 @@ OBJS=${objdir}/glm_globals.o \
      ${objdir}/glm_types.o \
      ${objdir}/glm_const.o \
      ${objdir}/glm_debug.o \
-     ${objdir}/glm_heatexchange.o \
      ${objdir}/glm_balance.o \
      ${objdir}/glm_heatexchange.o \
      ${objdir}/glm_main.o

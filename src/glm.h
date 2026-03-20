@@ -35,7 +35,7 @@
 #endif
 #define USE_FILLVALUE 1
 
-#define GLM_VERSION  "3.9.106"
+#define GLM_VERSION  "3.9.107"
 
 #define POINT         0
 #define Z_SHAPE       1
@@ -95,8 +95,6 @@
 //  the only lace you will know is in macros like this and when allocating arrays
 //#define WQ_INF_(a,i,j) a[_IDX_2d(MaxInf,MaxVars,i,j)]
   #define WQ_INF_(a,i,j) a[_IDX_2d(MaxVars,MaxInf,j,i)]
-//#define WQ_OUT_(a,i,j) a[_IDX_2d(MaxOut,MaxVars,i,j)]
-  #define WQ_OUT_(a,i,j) a[_IDX_2d(MaxOut,MaxVars,j,i)]
 
   #define AMOD fmod
   typedef double AED_REAL;
