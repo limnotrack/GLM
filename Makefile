@@ -101,8 +101,13 @@ ifeq ($(OSTYPE),Darwin)
   SHARED=-dynamiclib -undefined dynamic_lookup
   so_ext=dylib
 else ifeq ($(OSTYPE),Msys)
-  CINCLUDES+=-I../ancillary/windows/include
-  LIBS+=-L../ancillary/windows/lib
+  ifeq ("$(wildcard '../ancillary/windows'", "")
+    CINCLUDES+=-I../ancillary/include
+    LIBS+=-L../ancillary/lib
+  else
+    CINCLUDES+=-I../ancillary/windows/include
+    LIBS+=-L../ancillary/windows/lib
+  endif
 else ifeq ($(OSTYPE),FreeBSD)
   FINCLUDES+=-I/usr/local/flang/include -I/usr/local/include
   CINCLUDES+=-I/usr/local/include
