@@ -57,6 +57,7 @@
 #include "aed_csv.h"
 #include "glm_csv.h"
 #include "glm_ncdf.h"
+#include "glm_restart.h"
 #include "glm_wqual.h"
 #include "glm_ptm.h"
 #include "glm_plot.h"
@@ -352,6 +353,10 @@ void write_output(int jday, int iclock, int nsave, int stepnum)
                 write_csv_point(i, "", 0.0, NULL, TRUE);
         }
     }
+
+    /* Write intermediate NetCDF restart file if interval is set */
+    if (rst_fn != NULL && rst_nsave > 0 && (stepnum % rst_nsave == 0))
+        write_glm_restart(rst_fn);
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 

@@ -63,6 +63,7 @@
 #include "glm_stress.h"
 #include "glm_balance.h"
 #include "glm_heatexchange.h"
+#include "glm_restart.h"
 #ifdef PLOTS
 #include <libplot.h>
 #include "glm_plot.h"
@@ -947,5 +948,9 @@ void end_model()
     if (wq_calc) wq_clean_glm();    //# deallocataes wq stuff
 
     close_output();
+
+    /* Write the final NetCDF restart file if configured */
+    if (rst_fn != NULL)
+        write_glm_restart(rst_fn);
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
