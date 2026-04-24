@@ -48,6 +48,7 @@
 #include "glm_bird.h"
 #include "glm_ncdf.h"
 #include "glm_balance.h"
+#include "glm_restart.h"
 #include "glm_heatexchange.h"
 
 #include <aed_time.h>
@@ -202,12 +203,16 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     int             csv_outlet_nvars  = 0;
     char          **csv_outlet_vars   = NULL;
     char           *csv_ovrflw_fname  = NULL;
+    char           *local_rst_fn      = NULL;
+    int             local_rst_nsave   = 0;
     //==========================================================================
     NAMELIST output[] = {
          { "output",              TYPE_START,             NULL                },
          { "out_dir",             TYPE_STR,              &out_dir             },
          { "out_fn",              TYPE_STR,              &out_fn              },
          { "nsave",               TYPE_INT,               nsave               },
+         { "rst_fn",              TYPE_STR,              &local_rst_fn        },
+         { "rst_nsave",           TYPE_INT,              &local_rst_nsave     },
          { "csv_point_nlevs",     TYPE_INT,              &csv_point_nlevs     },
          { "csv_point_fname",     TYPE_STR,              &csv_point_fname     },
          { "csv_point_frombot",   TYPE_BOOL|MASK_LIST,   &csv_point_frombot   },
@@ -766,6 +771,12 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
         strcpy(outp_dir, out_dir);
         strcpy(outp_fn, out_fn);
     }
+
+    /* Store restart configuration into module globals */
+    if (local_rst_fn != NULL) {
+        rst_fn = strdup(local_rst_fn);
+    }
+    rst_nsave = local_rst_nsave;
 
     if ( csv_point_nlevs > MaxPointCSV ) { fprintf(stderr, "csv_point_nlevs must be < %d\n", MaxPointCSV); exit(1); }
     if ( csv_point_nvars > MaxCSVOutVars ) { fprintf(stderr, "csv_point_nvars must be < %d\n", MaxCSVOutVars); exit(1); }
@@ -1364,6 +1375,7 @@ for (i = 0; i < n_zones; i++) {
     // Initialize heat pump system
     init_heat_pump();
     check_heat_pump_config();
+
 #if DEBUG
     debug_initialisation(0);
 #endif
@@ -1659,27 +1671,31 @@ void initialise_lake(int namlst)
     AED_REAL        avg_surf_temp = 6.0;
     AED_REAL       *restart_variables = NULL;
     int             restart_mixer_count;
+    char           *init_restart_file     = NULL;
+    int             init_restart_from_file = 0;
 
     //==========================================================================
     NAMELIST init_profiles[] = {
-          { "init_profiles",       TYPE_START,            NULL                },
-          { "lake_depth",          TYPE_DOUBLE,           &lake_depth         },
-          { "num_heights",         TYPE_INT,              &num_heights        },
-          { "the_heights",         TYPE_DOUBLE|MASK_LIST, &the_heights        },
-          { "num_depths",          TYPE_INT,              &num_depths         },
-          { "the_depths",          TYPE_DOUBLE|MASK_LIST, &the_depths         },
-          { "the_temps",           TYPE_DOUBLE|MASK_LIST, &the_temps          },
-          { "the_sals",            TYPE_DOUBLE|MASK_LIST, &the_sals           },
-          { "num_wq_vars",         TYPE_INT,              &num_wq_vars        },
-          { "wq_names",            TYPE_STR|MASK_LIST,    &wq_names           },
-          { "wq_init_vals",        TYPE_DOUBLE|MASK_LIST, &wq_init_vals       },
-          { "snow_thickness",      TYPE_DOUBLE,           &snow_thickness     },
-          { "white_ice_thickness", TYPE_DOUBLE,           &white_ice_thickness},
-          { "blue_ice_thickness",  TYPE_DOUBLE,           &blue_ice_thickness },
-          { "avg_surf_temp",       TYPE_DOUBLE,           &avg_surf_temp      },
-          { "restart_variables",   TYPE_DOUBLE|MASK_LIST, &restart_variables  },
-          { "restart_mixer_count", TYPE_INT,              &restart_mixer_count},
-          { NULL,                  TYPE_END,              NULL                }
+          { "init_profiles",          TYPE_START,            NULL                   },
+          { "lake_depth",             TYPE_DOUBLE,           &lake_depth            },
+          { "num_heights",            TYPE_INT,              &num_heights           },
+          { "the_heights",            TYPE_DOUBLE|MASK_LIST, &the_heights           },
+          { "num_depths",             TYPE_INT,              &num_depths            },
+          { "the_depths",             TYPE_DOUBLE|MASK_LIST, &the_depths            },
+          { "the_temps",              TYPE_DOUBLE|MASK_LIST, &the_temps             },
+          { "the_sals",               TYPE_DOUBLE|MASK_LIST, &the_sals              },
+          { "num_wq_vars",            TYPE_INT,              &num_wq_vars           },
+          { "wq_names",               TYPE_STR|MASK_LIST,    &wq_names              },
+          { "wq_init_vals",           TYPE_DOUBLE|MASK_LIST, &wq_init_vals          },
+          { "snow_thickness",         TYPE_DOUBLE,           &snow_thickness        },
+          { "white_ice_thickness",    TYPE_DOUBLE,           &white_ice_thickness   },
+          { "blue_ice_thickness",     TYPE_DOUBLE,           &blue_ice_thickness    },
+          { "avg_surf_temp",          TYPE_DOUBLE,           &avg_surf_temp         },
+          { "restart_variables",      TYPE_DOUBLE|MASK_LIST, &restart_variables     },
+          { "restart_mixer_count",    TYPE_INT,              &restart_mixer_count   },
+          { "init_restart_file",      TYPE_STR,              &init_restart_file     },
+          { "init_restart_from_file", TYPE_INT,              &init_restart_from_file},
+          { NULL,                     TYPE_END,              NULL                   }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
 
@@ -1855,8 +1871,16 @@ void initialise_lake(int namlst)
 
         if (need_free) free(restart_variables);
     }
+
+    /* Load state from a NetCDF restart file if requested via init_profiles. */
+    if (init_restart_from_file != 0 && init_restart_file != NULL) {
+        if (read_glm_restart(init_restart_file))
+            fprintf(stderr, "     Restart state loaded from %s\n", init_restart_file);
+        else
+            fprintf(stderr, "     WARNING: init_restart_from_file set but could not read '%s'; using profile init\n", init_restart_file);
+    }
 }
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 
 /******************************************************************************
