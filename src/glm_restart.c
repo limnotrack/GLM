@@ -61,8 +61,8 @@
 
 /*----------------------------------------------------------------------------*/
 /* Global restart configuration                                               */
-char *rst_fn    = NULL;
-int   rst_nsave = 0;
+char *restart_fname    = NULL;
+int   restart_nsave = 0;
 
 /*----------------------------------------------------------------------------*/
 /* Helpers                                                                    */

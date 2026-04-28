@@ -211,8 +211,8 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
          { "out_dir",             TYPE_STR,              &out_dir             },
          { "out_fn",              TYPE_STR,              &out_fn              },
          { "nsave",               TYPE_INT,               nsave               },
-         { "rst_fn",              TYPE_STR,              &local_rst_fn        },
-         { "rst_nsave",           TYPE_INT,              &local_rst_nsave     },
+         { "restart_fname",              TYPE_STR,              &local_rst_fn        },
+         { "restart_nsave",           TYPE_INT,              &local_rst_nsave     },
          { "csv_point_nlevs",     TYPE_INT,              &csv_point_nlevs     },
          { "csv_point_fname",     TYPE_STR,              &csv_point_fname     },
          { "csv_point_frombot",   TYPE_BOOL|MASK_LIST,   &csv_point_frombot   },
@@ -774,9 +774,9 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
 
     /* Store restart configuration into module globals */
     if (local_rst_fn != NULL) {
-        rst_fn = strdup(local_rst_fn);
+        restart_fname = strdup(local_rst_fn);
     }
-    rst_nsave = local_rst_nsave;
+    restart_nsave = local_rst_nsave;
 
     if ( csv_point_nlevs > MaxPointCSV ) { fprintf(stderr, "csv_point_nlevs must be < %d\n", MaxPointCSV); exit(1); }
     if ( csv_point_nvars > MaxCSVOutVars ) { fprintf(stderr, "csv_point_nvars must be < %d\n", MaxCSVOutVars); exit(1); }
@@ -1671,7 +1671,7 @@ void initialise_lake(int namlst)
     AED_REAL        avg_surf_temp = 6.0;
     AED_REAL       *restart_variables = NULL;
     int             restart_mixer_count;
-    char           *init_restart_file     = NULL;
+    char           *init_restart_fname     = NULL;
     int             init_restart_from_file = 0;
 
     //==========================================================================
@@ -1693,7 +1693,7 @@ void initialise_lake(int namlst)
           { "avg_surf_temp",          TYPE_DOUBLE,           &avg_surf_temp         },
           { "restart_variables",      TYPE_DOUBLE|MASK_LIST, &restart_variables     },
           { "restart_mixer_count",    TYPE_INT,              &restart_mixer_count   },
-          { "init_restart_file",      TYPE_STR,              &init_restart_file     },
+          { "init_restart_fname",      TYPE_STR,              &init_restart_fname     },
           { "init_restart_from_file", TYPE_INT,              &init_restart_from_file},
           { NULL,                     TYPE_END,              NULL                   }
     };
@@ -1873,11 +1873,11 @@ void initialise_lake(int namlst)
     }
 
     /* Load state from a NetCDF restart file if requested via init_profiles. */
-    if (init_restart_from_file != 0 && init_restart_file != NULL) {
-        if (read_glm_restart(init_restart_file))
-            fprintf(stderr, "     Restart state loaded from %s\n", init_restart_file);
+    if (init_restart_from_file != 0 && init_restart_fname != NULL) {
+        if (read_glm_restart(init_restart_fname))
+            fprintf(stderr, "     Restart state loaded from %s\n", init_restart_fname);
         else
-            fprintf(stderr, "     WARNING: init_restart_from_file set but could not read '%s'; using profile init\n", init_restart_file);
+            fprintf(stderr, "     WARNING: init_restart_from_file set but could not read '%s'; using profile init\n", init_restart_fname);
     }
 }
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/

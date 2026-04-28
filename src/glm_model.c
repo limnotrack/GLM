@@ -950,7 +950,7 @@ void end_model()
     close_output();
 
     /* Write the final NetCDF restart file if configured */
-    if (rst_fn != NULL)
-        write_glm_restart(rst_fn);
+    if (restart_fname != NULL)
+        write_glm_restart(restart_fname);
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/

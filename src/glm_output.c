@@ -355,8 +355,8 @@ void write_output(int jday, int iclock, int nsave, int stepnum)
     }
 
     /* Write intermediate NetCDF restart file if interval is set */
-    if (rst_fn != NULL && rst_nsave > 0 && (stepnum % rst_nsave == 0))
-        write_glm_restart(rst_fn);
+    if (restart_fname != NULL && restart_nsave > 0 && (stepnum % restart_nsave == 0))
+        write_glm_restart(restart_fname);
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
