@@ -43,6 +43,11 @@
         AED_REAL,INTENT(in) :: iwqvars(*)
      END SUBROUTINE set_c_wqvars_ptr
 
+     SUBROUTINE set_c_wqsvars_ptr(iwqsvars) BIND(C, name="set_c_wqsvars_ptr")
+        USE ISO_C_BINDING
+        AED_REAL,INTENT(in) :: iwqsvars(*)
+     END SUBROUTINE set_c_wqsvars_ptr
+
      SUBROUTINE set_c_wqdvars_ptr(iwqdvars,iwqdsvars,nwqd,nwqds) BIND(C, name="set_c_wqdvars_ptr")
         USE ISO_C_BINDING
 #       if defined( _WIN32 ) && USE_DL_LOADER
@@ -69,6 +74,11 @@
 #       endif
         AED_REAL,INTENT(in) :: iptmv(*)
      END SUBROUTINE set_c_ptmenv_ptr
+
+     SUBROUTINE set_c_num_ptm_vars(n) BIND(C, name="set_c_num_ptm_vars")
+        USE ISO_C_BINDING
+        CINTEGER,INTENT(in) :: n
+     END SUBROUTINE set_c_num_ptm_vars
 
 # if DEBUG
      SUBROUTINE debug_print_lake() BIND(C, name="debug_print_lake")
@@ -326,6 +336,7 @@ extern AED_REAL settling_efficiency;
 extern AED_REAL *inflow_conc;  //# concentration of particles per ?? in the inflow
 
 extern partgroup *Particles;
+extern int Num_PTM_Vars;  //# number of AED particle-tracked WQ variables (n_ptm_vars)
 
 /*----------------------------------------------------------------------------*/
 // TIME
@@ -393,9 +404,11 @@ extern AED_REAL Latitude;
 /******************************************************************************/
 void allocate_storage(void);
 void set_c_wqvars_ptr(AED_REAL *iwqvars);
+void set_c_wqsvars_ptr(AED_REAL *iwqsvars);
 void set_c_wqdvars_ptr(AED_REAL *iwqd, AED_REAL *iwqds, int *nwqd, int *nwqds);
 void set_c_ptmstat_ptr(int *iptms);
 void set_c_ptmenv_ptr(AED_REAL *iptmv);
+void set_c_num_ptm_vars(int *n);
 void debug_print_lake(void);
 void debug_initialisation(int which);
 void debug_initialisation_(int *which);
