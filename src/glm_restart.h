@@ -31,9 +31,9 @@
 #define _GLM_RESTART_H_
 
 /* Name of the restart file (NULL => no NetCDF restart) */
-extern char *rst_fn;
-/* Write restart every rst_nsave steps (<=0 => only at end) */
-extern int   rst_nsave;
+extern char *restart_fname;
+/* Write restart every restart_nsave steps (<=0 => only at end) */
+extern int   restart_nsave;
 
 /*
  * write_glm_restart: write all model state to a NetCDF restart file.

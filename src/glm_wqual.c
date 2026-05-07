@@ -66,6 +66,7 @@ wq_is_var_t          p_wq_is_var          = NULL;
 wq_set_glm_zones_t   p_wq_set_glm_zones   = NULL;
 wq_ZSoilTemp_t       p_wq_ZSoilTemp       = NULL;
 wq_inflow_update_t   p_wq_inflow_update   = (wq_inflow_update_t)dummy_inflow_update;
+wq_get_var_names_t   p_wq_get_var_names   = NULL;
 
 void glm_init_fortran_support(void);
 
@@ -134,6 +135,8 @@ int prime_wq(const char *which)
     p_wq_ZSoilTemp       =       (wq_ZSoilTemp_t) find_entry(glm_wq_handle, "zZSoilTemp");
     if ( p_wq_ZSoilTemp == NULL ) p_wq_ZSoilTemp = (wq_ZSoilTemp_t) dummyZSoilTemp;
     p_wq_inflow_update   =   (wq_inflow_update_t) find_entry(glm_wq_handle, "wq_inflow_update");
+    /* optional — not present in older plugin builds */
+    p_wq_get_var_names   =   (wq_get_var_names_t) dlsym(glm_wq_handle, "wq_get_var_names");
 #ifdef _WIN32
     p_set_funcs          =          (set_funcs_t) find_entry(glm_wq_handle, "set_funcs");
 
@@ -187,8 +190,8 @@ int prime_wq(const char *which)
         p_wq_var_index_c     =     (wq_var_index_c_t) aed_var_index_c;
         p_wq_is_var          =          (wq_is_var_t) aed_is_var;
         p_wq_inflow_update   =   (wq_inflow_update_t) aed_update_inflow_wq;
+        p_wq_get_var_names   =   (wq_get_var_names_t) aed_get_var_names;
 #else
-        fprintf(stderr, "AED not supported in this build\n");
         exit(1);
 #endif
 
@@ -204,6 +207,7 @@ int prime_wq(const char *which)
         p_wq_var_index_c     =     (wq_var_index_c_t) api_var_index_c;
         p_wq_is_var          =          (wq_is_var_t) api_is_var;
         p_wq_inflow_update   =   (wq_inflow_update_t) api_update_inflow_wq;
+        p_wq_get_var_names   =   (wq_get_var_names_t) api_get_var_names;
 #else
         fprintf(stderr, "API not supported in this build\n");
         exit(1);

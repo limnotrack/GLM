@@ -226,6 +226,7 @@ SUBROUTINE api_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
 
    NumWQ_Vars  = n_vars
    NumWQ_Ben   = n_vars_ben
+   CALL set_c_num_ptm_vars(n_ptm_vars)
 
    ALLOCATE(plot_id_v(n_vars))
    ALLOCATE(plot_id_sv(n_vars_ben))
@@ -420,6 +421,7 @@ SUBROUTINE api_set_glm_data()                     BIND(C, name=_WQ_SET_GLM_DATA)
    CALL set_c_wqvars_ptr(cc)
 
    cc_hz => cc(n_vars+1:n_vars+n_vars_ben, 1)
+   IF (n_vars_ben > 0) CALL set_c_wqsvars_ptr(cc_hz)
 
    !# Allocate diagnostic variable array and set all values to zero.
    !# (needed because time-integrated/averaged variables will increment rather than set the array)
@@ -848,6 +850,46 @@ CINTEGER FUNCTION aed_var_index_c(name, len)       BIND(C, name=_WQ_VAR_INDEX_C)
    tn = trim(transfer(name(1:len),tn))
    aed_var_index_c = aed_var_index(tn) - 1
 END FUNCTION aed_var_index_c
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+!###############################################################################
+SUBROUTINE api_get_var_names(wbuf, wlen, bbuf, blen) BIND(C, name="api_get_var_names")
+!-------------------------------------------------------------------------------
+! Fill comma-separated C strings with all water-column and benthic WQ state
+! variable names in their AED index order (matching rows of wq_vars / wqs_vars).
+!-------------------------------------------------------------------------------
+!ARGUMENTS
+   CCHARACTER, INTENT(out) :: wbuf(*), bbuf(*)
+   CINTEGER,   INTENT(out) :: wlen, blen
+!LOCALS
+   TYPE(aed_variable_t), POINTER :: tvar
+   INTEGER :: i, j, nlen, w, b
+!
+!-------------------------------------------------------------------------------
+!BEGIN
+   w = 0 ; b = 0
+   DO i=1,n_aed_vars
+      IF ( aed_get_var(i, tvar) ) THEN
+         IF ( tvar%var_type == V_STATE ) THEN
+            nlen = LEN_TRIM(tvar%name)
+            IF ( .NOT. tvar%sheet ) THEN
+               IF (w > 0) THEN ; wbuf(w+1) = ',' ; w = w+1 ; ENDIF
+               DO j=1,nlen ; wbuf(w+j) = tvar%name(j:j) ; ENDDO
+               w = w + nlen
+            ELSE
+               IF (b > 0) THEN ; bbuf(b+1) = ',' ; b = b+1 ; ENDIF
+               DO j=1,nlen ; bbuf(b+j) = tvar%name(j:j) ; ENDDO
+               b = b + nlen
+            ENDIF
+         ENDIF
+      ENDIF
+   ENDDO
+   wbuf(w+1) = ACHAR(0)
+   bbuf(b+1) = ACHAR(0)
+   wlen = w
+   blen = b
+END SUBROUTINE api_get_var_names
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 END MODULE glm_api_aed

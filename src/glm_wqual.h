@@ -47,6 +47,7 @@ typedef void (*wq_set_glm_zones_t)(int *numVars, int *numBenV, int *numDiagV, in
 typedef void (*wq_ZSoilTemp_t)(ZoneType *zone);
 
 typedef void (*wq_inflow_update_t)(AED_REAL *wqinf, int *nwqVars, AED_REAL *temp, AED_REAL *salt);
+typedef void (*wq_get_var_names_t)(char *wbuf, int *wlen, char *bbuf, int *blen);
 
 
 extern wq_init_glm_t        p_wq_init_glm;
@@ -59,6 +60,7 @@ extern wq_var_index_c_t     p_wq_var_index_c;
 extern wq_is_var_t          p_wq_is_var;
 extern wq_ZSoilTemp_t       p_wq_ZSoilTemp;
 extern wq_inflow_update_t   p_wq_inflow_update;
+extern wq_get_var_names_t   p_wq_get_var_names;
 
 #define wq_init_glm        (*p_wq_init_glm)
 #define wq_set_glm_data    (*p_wq_set_glm_data)
@@ -70,6 +72,7 @@ extern wq_inflow_update_t   p_wq_inflow_update;
 #define wq_is_var          (*p_wq_is_var)
 #define ZSoilTemp          (*p_wq_ZSoilTemp)
 #define wq_inflow_update   (*p_wq_inflow_update)
+#define wq_get_var_names   (*p_wq_get_var_names)
 
 int prime_wq(const char *which);
 
@@ -111,6 +114,7 @@ void api_write_glm(int *ncid, int *wlev, int *nlev, int *lvl, int *point_nlevs);
 int  api_var_index_c(const char*name, size_t *len);
 int  api_is_var(int *id, const char *v, size_t *len);
 void api_update_inflow_wq(AED_REAL *wqinf, int *nwqVars, AED_REAL *temp, AED_REAL *salt);
+void api_get_var_names(char *wbuf, int *wlen, char *bbuf, int *blen);
 #endif
 
 #if AED
@@ -123,6 +127,7 @@ void aed_write_glm(int *ncid, int *wlev, int *nlev, int *lvl, int *point_nlevs);
 int  aed_var_index_c(const char*name, size_t *len);
 int  aed_is_var(int *id, const char *v, size_t *len);
 void aed_update_inflow_wq(AED_REAL *wqinf, int *nwqVars, AED_REAL *temp, AED_REAL *salt);
+void aed_get_var_names(char *wbuf, int *wlen, char *bbuf, int *blen);
 #endif
 
 #if AED2

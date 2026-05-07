@@ -46,6 +46,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#define WQ_NAME_LEN 48  /* matches Fortran CHARACTER(LEN=48) for AED variable names */
 
 #include <netcdf.h>
 
@@ -53,12 +56,13 @@
 #include "glm_types.h"
 #include "glm_globals.h"
 #include "glm_ncdf.h"
+#include "glm_wqual.h"
 #include "glm_restart.h"
 
 /*----------------------------------------------------------------------------*/
 /* Global restart configuration                                               */
-char *rst_fn    = NULL;
-int   rst_nsave = 0;
+char *restart_fname    = NULL;
+int   restart_nsave = 0;
 
 /*----------------------------------------------------------------------------*/
 /* Helpers                                                                    */
@@ -104,19 +108,20 @@ void write_glm_restart(const char *fn)
     rst_ncid_ = ncid;
 
     /* -------- define dimensions -------- */
-    int dim_nlev, dim_maxpar, dim_numinf, dim_wqvars, dim_wqben, dim_zones;
+    int dim_nlev, dim_maxpar, dim_numinf, dim_wqvars, dim_wqben, dim_zones, dim_wqnamelen;
     int dim_sedlayers = -1;
 
-    RST_CHECK(nc_def_dim(ncid, "nlev",        NumLayers,   &dim_nlev));
+    RST_CHECK(nc_def_dim(ncid, "nlev",        MaxLayers,   &dim_nlev));
     RST_CHECK(nc_def_dim(ncid, "max_par",     MaxPar,      &dim_maxpar));
     RST_CHECK(nc_def_dim(ncid, "num_inflows",  NumInf > 0 ? NumInf : 1,
                          &dim_numinf));
-    int nwq = (wq_calc && Tot_WQ_Vars > 0) ? Tot_WQ_Vars : 1;
-    RST_CHECK(nc_def_dim(ncid, "wq_vars",     nwq,         &dim_wqvars));
+    int nwq = (wq_calc && Num_WQ_Vars > 0) ? Num_WQ_Vars : 1;
+    RST_CHECK(nc_def_dim(ncid, "num_wq_vars", nwq,         &dim_wqvars));
     int nben = (wq_calc && Num_WQ_Ben > 0) ? Num_WQ_Ben : 1;
-    RST_CHECK(nc_def_dim(ncid, "wq_ben",      nben,        &dim_wqben));
+    RST_CHECK(nc_def_dim(ncid, "num_wq_ben",  nben,        &dim_wqben));
     RST_CHECK(nc_def_dim(ncid, "n_zones",     n_zones > 0 ? n_zones : 1,
                          &dim_zones));
+    RST_CHECK(nc_def_dim(ncid, "wq_name_len", WQ_NAME_LEN, &dim_wqnamelen));
     int n_sed_layers_rst = 0;
     if (sed_heat_model == 2 && n_zones > 0 && theZones != NULL)
         n_sed_layers_rst = theZones[0].n_sed_layers;
@@ -126,16 +131,24 @@ void write_glm_restart(const char *fn)
 
     /* PTM dimensions (only defined when particles are active) */
     static const int PTM_STAT_NVARS = 6; /* STAT,IDX2,IDX3,LAYR,FLAG,PTID */
+    static const int PTM_ENV_NVARS  = 5; /* MASS,DIAM,DENS,VVEL,HGHT (n_ptm_env) */
     int dim_ptm_par = -1, dim_ptm_sv = -1, dim_ptm_wqv = -1;
     int ptm_enabled = (ptm_sw && PTM_Stat != NULL && max_particle_num > 0) ? 1 : 0;
     if (ptm_enabled) {
-        RST_CHECK(nc_def_dim(ncid, "ptm_particles", max_particle_num, &dim_ptm_par));
-        RST_CHECK(nc_def_dim(ncid, "ptm_stat_vars", PTM_STAT_NVARS,   &dim_ptm_sv));
-        RST_CHECK(nc_def_dim(ncid, "ptm_wq_vars",   Num_WQ_Vars,      &dim_ptm_wqv));
+        RST_CHECK(nc_def_dim(ncid, "ptm_particles",  max_particle_num,            &dim_ptm_par));
+        RST_CHECK(nc_def_dim(ncid, "ptm_stat_vars",  PTM_STAT_NVARS,              &dim_ptm_sv));
+        RST_CHECK(nc_def_dim(ncid, "num_ptm_wq_vars", PTM_ENV_NVARS + Num_PTM_Vars, &dim_ptm_wqv));
     }
 
     /* -------- global attributes -------- */
+    {
+        time_t now = time(NULL);
+        char ts[32];
+        strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        RST_CHECK(nc_put_att_text(ncid, NC_GLOBAL, "creation_time", strlen(ts), ts));
+    }
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "NumLayers",       NC_INT, 1, &NumLayers));
+    RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "MaxLayers",       NC_INT, 1, &MaxLayers));
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "NumInf",          NC_INT, 1, &NumInf));
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "Tot_WQ_Vars",     NC_INT, 1, &Tot_WQ_Vars));
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "Num_WQ_Ben",      NC_INT, 1, &Num_WQ_Ben));
@@ -143,20 +156,20 @@ void write_glm_restart(const char *fn)
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "sed_heat_model",  NC_INT, 1, &sed_heat_model));
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "n_sed_layers_rst",NC_INT, 1, &n_sed_layers_rst));
     RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "ptm_enabled",     NC_INT, 1, &ptm_enabled));
-    RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "max_particle_num",NC_INT, 1, &max_particle_num));
-    RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "Num_WQ_Vars",     NC_INT, 1, &Num_WQ_Vars));
+    if (ptm_enabled) {
+        RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "max_particle_num",NC_INT, 1, &max_particle_num));
+        RST_CHECK(nc_put_att_int(ncid, NC_GLOBAL, "Num_PTM_Vars",    NC_INT, 1, &Num_PTM_Vars));
+    }
 
     /* -------- define variables -------- */
 
     /* Lake layer arrays [nlev] */
-    int id_temp, id_salt, id_height, id_layvol, id_layarea;
-    int id_meanht, id_dens, id_eps, id_umean, id_uorb, id_stress;
+    /* lake_layervol, lake_layerarea, lake_meanheight are omitted: they are
+     * re-derived from Height via the morphometry table on the first timestep. */
+    int id_temp, id_salt, id_height, id_dens, id_eps, id_umean, id_uorb, id_stress;
     def_var_d(ncid, "lake_temp",        1, &dim_nlev, &id_temp);
     def_var_d(ncid, "lake_salt",        1, &dim_nlev, &id_salt);
     def_var_d(ncid, "lake_height",      1, &dim_nlev, &id_height);
-    def_var_d(ncid, "lake_layervol",    1, &dim_nlev, &id_layvol);
-    def_var_d(ncid, "lake_layerarea",   1, &dim_nlev, &id_layarea);
-    def_var_d(ncid, "lake_meanheight",  1, &dim_nlev, &id_meanht);
     def_var_d(ncid, "lake_density",     1, &dim_nlev, &id_dens);
     def_var_d(ncid, "lake_epsilon",     1, &dim_nlev, &id_eps);
     def_var_d(ncid, "lake_umean",       1, &dim_nlev, &id_umean);
@@ -165,7 +178,7 @@ void write_glm_restart(const char *fn)
 
     /* WQ per-layer [wq_vars, nlev] (stored as flat [wq_vars * nlev]) */
     int id_wq = -1;
-    if (wq_calc && Tot_WQ_Vars > 0) {
+    if (wq_calc && Num_WQ_Vars > 0) {
         int dims2[2] = { dim_wqvars, dim_nlev };
         def_var_d(ncid, "wq_vars", 2, dims2, &id_wq);
     }
@@ -174,6 +187,17 @@ void write_glm_restart(const char *fn)
     int id_wqs = -1;
     if (wq_calc && Num_WQ_Ben > 0 && WQS_Vars != NULL) {
         def_var_d(ncid, "wqs_vars", 1, &dim_wqben, &id_wqs);
+    }
+
+    /* WQ variable name strings [num_wq_vars, wq_name_len] and [num_wq_ben, wq_name_len] */
+    int id_wqnames = -1, id_wqbennames = -1;
+    if (wq_calc && Num_WQ_Vars > 0) {
+        int dims_wn[2] = { dim_wqvars, dim_wqnamelen };
+        RST_CHECK(nc_def_var(ncid, "wq_var_names", NC_CHAR, 2, dims_wn, &id_wqnames));
+    }
+    if (wq_calc && Num_WQ_Ben > 0) {
+        int dims_wb[2] = { dim_wqben, dim_wqnamelen };
+        RST_CHECK(nc_def_var(ncid, "wq_ben_names", NC_CHAR, 2, dims_wb, &id_wqbennames));
     }
 
     /* Surface scalars */
@@ -217,7 +241,7 @@ void write_glm_restart(const char *fn)
         def_var_i(ncid, "inflow_noins", 1, &dim_numinf, &id_noins);
         def_var_i(ncid, "inflow_icnt",  1, &dim_numinf, &id_icnt);
         def_var_d(ncid, "inflow_submelev", 1, &dim_numinf, &id_submelev);
-        if (wq_calc && Tot_WQ_Vars > 0) {
+        if (wq_calc && Num_WQ_Vars > 0) {
             int dims_iw[3] = { dim_numinf, dim_maxpar, dim_wqvars };
             def_var_d(ncid, "inflow_wqins", 3, dims_iw, &id_wqins);
         }
@@ -247,20 +271,17 @@ void write_glm_restart(const char *fn)
     /* -------- write data -------- */
 
     /* Allocate a working buffer large enough for any 1-D layer array */
-    AED_REAL *buf = malloc(NumLayers * sizeof(AED_REAL));
+    AED_REAL *buf = malloc(MaxLayers * sizeof(AED_REAL));
     if (!buf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
 
-    /* Lake layer fields */
+    /* Lake layer fields (all MaxLayers slots, active + unused) */
 #define WRITE_LAKE_FIELD(varid, field) \
-    do { for (int _i = 0; _i < NumLayers; _i++) buf[_i] = Lake[_i].field; \
+    do { for (int _i = 0; _i < MaxLayers; _i++) buf[_i] = Lake[_i].field; \
          RST_CHECK(nc_put_var_double(ncid, varid, buf)); } while(0)
 
     WRITE_LAKE_FIELD(id_temp,    Temp);
     WRITE_LAKE_FIELD(id_salt,    Salinity);
     WRITE_LAKE_FIELD(id_height,  Height);
-    WRITE_LAKE_FIELD(id_layvol,  LayerVol);
-    WRITE_LAKE_FIELD(id_layarea, LayerArea);
-    WRITE_LAKE_FIELD(id_meanht,  MeanHeight);
     WRITE_LAKE_FIELD(id_dens,    Density);
     WRITE_LAKE_FIELD(id_eps,     Epsilon);
     WRITE_LAKE_FIELD(id_umean,   Umean);
@@ -270,16 +291,16 @@ void write_glm_restart(const char *fn)
 
     free(buf);
 
-    /* WQ per-layer: WQ_Vars layout is [Tot_WQ_Vars * MaxLayers] with index
-     * _WQ_Vars(var, lyr) = WQ_Vars[Tot_WQ_Vars * lyr + var]
-     * We write a [wq_vars, nlev] array (contiguous in var for each layer). */
+    /* WQ per-layer: save only the Num_WQ_Vars pelagic rows (indices 0..Num_WQ_Vars-1).
+     * Benthic sheet rows (indices Num_WQ_Vars..Tot_WQ_Vars-1) are saved separately
+     * via wqs_vars.  We write a [num_wq_vars, nlev] array. */
     if (id_wq >= 0) {
-        /* Build a compact [Tot_WQ_Vars * NumLayers] buffer */
-        AED_REAL *wqbuf = malloc(Tot_WQ_Vars * NumLayers * sizeof(AED_REAL));
+        /* Build [Num_WQ_Vars * MaxLayers] buffer (all slots, active + unused) */
+        AED_REAL *wqbuf = malloc(Num_WQ_Vars * MaxLayers * sizeof(AED_REAL));
         if (!wqbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
-        for (int v = 0; v < Tot_WQ_Vars; v++)
-            for (int l = 0; l < NumLayers; l++)
-                wqbuf[v * NumLayers + l] = _WQ_Vars(v, l);
+        for (int v = 0; v < Num_WQ_Vars; v++)
+            for (int l = 0; l < MaxLayers; l++)
+                wqbuf[v * MaxLayers + l] = _WQ_Vars(v, l);
         RST_CHECK(nc_put_var_double(ncid, id_wq, wqbuf));
         free(wqbuf);
     }
@@ -287,6 +308,47 @@ void write_glm_restart(const char *fn)
     /* Benthic WQ sheet */
     if (id_wqs >= 0)
         RST_CHECK(nc_put_var_double(ncid, id_wqs, WQS_Vars));
+
+    /* WQ variable name strings */
+    if ((id_wqnames >= 0 || id_wqbennames >= 0) && p_wq_get_var_names != NULL) {
+        char wbuf[4096] = {0}, bbuf[1024] = {0};
+        int  wlen = 0, blen = 0;
+        p_wq_get_var_names(wbuf, &wlen, bbuf, &blen);
+
+        if (id_wqnames >= 0 && wlen > 0) {
+            char *flat = calloc((size_t)(Num_WQ_Vars * WQ_NAME_LEN), 1);
+            if (!flat) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
+            int row = 0;
+            char *tok = wbuf;
+            while (row < Num_WQ_Vars) {
+                char *comma = strchr(tok, ',');
+                int nlen = comma ? (int)(comma - tok) : (int)strlen(tok);
+                if (nlen > WQ_NAME_LEN) nlen = WQ_NAME_LEN;
+                memcpy(flat + row * WQ_NAME_LEN, tok, nlen);
+                row++;
+                if (comma) tok = comma + 1; else break;
+            }
+            RST_CHECK(nc_put_var_text(ncid, id_wqnames, flat));
+            free(flat);
+        }
+
+        if (id_wqbennames >= 0 && blen > 0) {
+            char *flat = calloc((size_t)(Num_WQ_Ben * WQ_NAME_LEN), 1);
+            if (!flat) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
+            int row = 0;
+            char *tok = bbuf;
+            while (row < Num_WQ_Ben) {
+                char *comma = strchr(tok, ',');
+                int nlen = comma ? (int)(comma - tok) : (int)strlen(tok);
+                if (nlen > WQ_NAME_LEN) nlen = WQ_NAME_LEN;
+                memcpy(flat + row * WQ_NAME_LEN, tok, nlen);
+                row++;
+                if (comma) tok = comma + 1; else break;
+            }
+            RST_CHECK(nc_put_var_text(ncid, id_wqbennames, flat));
+            free(flat);
+        }
+    }
 
     /* Surface scalars */
     RST_CHECK(nc_put_var_double(ncid, id_avgt,    &AvgSurfTemp));
@@ -353,14 +415,14 @@ void write_glm_restart(const char *fn)
         for (int s = 0; s < NumInf; s++) svec[s] = Inflows[s].SubmElev;
         RST_CHECK(nc_put_var_double(ncid, id_submelev, svec));
 
-        /* WQIns [NumInf, MaxPar, Tot_WQ_Vars] */
+        /* WQIns [NumInf, MaxPar, Num_WQ_Vars] */
         if (id_wqins >= 0) {
-            AED_REAL *wibuf = malloc(NumInf * MaxPar * Tot_WQ_Vars * sizeof(AED_REAL));
+            AED_REAL *wibuf = malloc(NumInf * MaxPar * Num_WQ_Vars * sizeof(AED_REAL));
             if (!wibuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
             for (int s = 0; s < NumInf; s++)
                 for (int p = 0; p < MaxPar; p++)
-                    for (int v = 0; v < Tot_WQ_Vars; v++)
-                        wibuf[(s * MaxPar + p) * Tot_WQ_Vars + v] =
+                    for (int v = 0; v < Num_WQ_Vars; v++)
+                        wibuf[(s * MaxPar + p) * Num_WQ_Vars + v] =
                             Inflows[s].WQIns[p][v];
             RST_CHECK(nc_put_var_double(ncid, id_wqins, wibuf));
             free(wibuf);
@@ -418,9 +480,10 @@ int read_glm_restart(const char *fn)
     rst_ncid_ = ncid;
 
     /* ---- validate global attributes ---- */
-    int att_nlev, att_numinf, att_tot_wq, att_nben, att_nzones;
+    int att_nlev, att_maxlayers, att_numinf, att_tot_wq, att_nben, att_nzones;
     int att_sed_heat_model, att_n_sed_layers_rst;
     RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "NumLayers",      &att_nlev));
+    RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "MaxLayers",      &att_maxlayers));
     RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "NumInf",         &att_numinf));
     RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "Tot_WQ_Vars",    &att_tot_wq));
     RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "Num_WQ_Ben",     &att_nben));
@@ -428,9 +491,14 @@ int read_glm_restart(const char *fn)
     RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "sed_heat_model", &att_sed_heat_model));
     RST_CHECK(nc_get_att_int(ncid, NC_GLOBAL, "n_sed_layers_rst", &att_n_sed_layers_rst));
 
-    if (att_nlev > MaxLayers) {
-        fprintf(stderr, "glm_restart: restart NumLayers (%d) > MaxLayers (%d)\n",
-                att_nlev, MaxLayers);
+    if (att_maxlayers > MaxLayers) {
+        fprintf(stderr, "glm_restart: restart MaxLayers (%d) > current MaxLayers (%d)\n",
+                att_maxlayers, MaxLayers);
+        exit(1);
+    }
+    if (att_nlev > att_maxlayers) {
+        fprintf(stderr, "glm_restart: restart NumLayers (%d) > restart MaxLayers (%d)\n",
+                att_nlev, att_maxlayers);
         exit(1);
     }
     if (att_numinf != NumInf) {
@@ -456,23 +524,20 @@ int read_glm_restart(const char *fn)
     int varid; \
     RST_CHECK(nc_inq_varid(ncid, name, &varid));
 
-    /* ---- lake layer fields ---- */
+    /* ---- lake layer fields (all MaxLayers slots) ---- */
     {
-        AED_REAL *buf = malloc(NumLayers * sizeof(AED_REAL));
+        AED_REAL *buf = malloc(att_maxlayers * sizeof(AED_REAL));
         if (!buf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
 
 #define READ_LAKE_FIELD(varname, field) \
         do { int _id; RST_CHECK(nc_inq_varid(ncid, varname, &_id)); \
              RST_CHECK(nc_get_var_double(ncid, _id, buf)); \
-             for (int _i = 0; _i < NumLayers; _i++) Lake[_i].field = buf[_i]; \
+             for (int _i = 0; _i < att_maxlayers; _i++) Lake[_i].field = buf[_i]; \
         } while(0)
 
         READ_LAKE_FIELD("lake_temp",       Temp);
         READ_LAKE_FIELD("lake_salt",       Salinity);
         READ_LAKE_FIELD("lake_height",     Height);
-        READ_LAKE_FIELD("lake_layervol",   LayerVol);
-        READ_LAKE_FIELD("lake_layerarea",  LayerArea);
-        READ_LAKE_FIELD("lake_meanheight", MeanHeight);
         READ_LAKE_FIELD("lake_density",    Density);
         READ_LAKE_FIELD("lake_epsilon",    Epsilon);
         READ_LAKE_FIELD("lake_umean",      Umean);
@@ -483,24 +548,34 @@ int read_glm_restart(const char *fn)
         free(buf);
     }
 
-    /* ---- WQ per-layer ---- */
-    if (wq_calc && Tot_WQ_Vars > 0 && WQ_Vars != NULL) {
+    /* ---- WQ per-layer (all MaxLayers slots) ---- */
+    if (wq_calc && Num_WQ_Vars > 0 && WQ_Vars != NULL) {
         int id_wq;
-        RST_CHECK(nc_inq_varid(ncid, "wq_vars", &id_wq));
-        AED_REAL *wqbuf = malloc(Tot_WQ_Vars * NumLayers * sizeof(AED_REAL));
-        if (!wqbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
-        RST_CHECK(nc_get_var_double(ncid, id_wq, wqbuf));
-        for (int v = 0; v < Tot_WQ_Vars; v++)
-            for (int l = 0; l < NumLayers; l++)
-                _WQ_Vars(v, l) = wqbuf[v * NumLayers + l];
-        free(wqbuf);
+        int wq_err = nc_inq_varid(ncid, "wq_vars", &id_wq);
+        if (wq_err == NC_NOERR) {
+            AED_REAL *wqbuf = malloc(Num_WQ_Vars * att_maxlayers * sizeof(AED_REAL));
+            if (!wqbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
+            RST_CHECK(nc_get_var_double(ncid, id_wq, wqbuf));
+            for (int v = 0; v < Num_WQ_Vars; v++)
+                for (int l = 0; l < att_maxlayers; l++)
+                    _WQ_Vars(v, l) = wqbuf[v * att_maxlayers + l];
+            free(wqbuf);
+        } else {
+            fprintf(stderr, "     WARNING: restart has no wq_vars variable; "
+                    "WQ state initialised from NML.\n");
+        }
     }
 
     /* ---- Benthic WQ sheet ---- */
     if (wq_calc && Num_WQ_Ben > 0 && WQS_Vars != NULL) {
         int id_wqs;
-        RST_CHECK(nc_inq_varid(ncid, "wqs_vars", &id_wqs));
-        RST_CHECK(nc_get_var_double(ncid, id_wqs, WQS_Vars));
+        int wqs_err = nc_inq_varid(ncid, "wqs_vars", &id_wqs);
+        if (wqs_err == NC_NOERR) {
+            RST_CHECK(nc_get_var_double(ncid, id_wqs, WQS_Vars));
+        } else {
+            fprintf(stderr, "     WARNING: restart has no wqs_vars variable; "
+                    "benthic WQ state initialised from NML.\n");
+        }
     }
 
     /* ---- Surface scalars ---- */
@@ -589,17 +664,17 @@ int read_glm_restart(const char *fn)
             for (int s = 0; s < NumInf; s++) Inflows[s].SubmElev = svec[s];
         }
 
-        if (wq_calc && Tot_WQ_Vars > 0) {
-            AED_REAL *wibuf = malloc(NumInf * MaxPar * Tot_WQ_Vars * sizeof(AED_REAL));
+        if (wq_calc && Num_WQ_Vars > 0) {
+            AED_REAL *wibuf = malloc(NumInf * MaxPar * Num_WQ_Vars * sizeof(AED_REAL));
             if (!wibuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
             int _id;
             RST_CHECK(nc_inq_varid(ncid, "inflow_wqins", &_id));
             RST_CHECK(nc_get_var_double(ncid, _id, wibuf));
             for (int s = 0; s < NumInf; s++)
                 for (int p = 0; p < MaxPar; p++)
-                    for (int v = 0; v < Tot_WQ_Vars; v++)
+                    for (int v = 0; v < Num_WQ_Vars; v++)
                         Inflows[s].WQIns[p][v] =
-                            wibuf[(s * MaxPar + p) * Tot_WQ_Vars + v];
+                            wibuf[(s * MaxPar + p) * Num_WQ_Vars + v];
             free(wibuf);
         }
 
@@ -630,12 +705,12 @@ int read_glm_restart(const char *fn)
 
     /* ---- PTM particle state ---- */
     {
-        int att_ptm_en = 0, att_max_ptm = 0, att_nwq = 0;
+        int att_ptm_en = 0, att_max_ptm = 0, att_ptm_vars = 0;
         /* Use nc_get_att_int without RST_CHECK — attribute may be absent in
          * older restart files; errors here are non-fatal. */
         nc_get_att_int(ncid, NC_GLOBAL, "ptm_enabled",     &att_ptm_en);
         nc_get_att_int(ncid, NC_GLOBAL, "max_particle_num",&att_max_ptm);
-        nc_get_att_int(ncid, NC_GLOBAL, "Num_WQ_Vars",     &att_nwq);
+        nc_get_att_int(ncid, NC_GLOBAL, "Num_PTM_Vars",    &att_ptm_vars);
 
         if (att_ptm_en) {
             if (!ptm_sw || PTM_Stat == NULL) {
@@ -645,10 +720,10 @@ int read_glm_restart(const char *fn)
                 fprintf(stderr, "     WARNING: restart max_particle_num (%d) "
                         "!= current (%d); particle state skipped.\n",
                         att_max_ptm, max_particle_num);
-            } else if (att_nwq != Num_WQ_Vars) {
-                fprintf(stderr, "     WARNING: restart Num_WQ_Vars (%d) "
+            } else if (att_ptm_vars != Num_PTM_Vars) {
+                fprintf(stderr, "     WARNING: restart Num_PTM_Vars (%d) "
                         "!= current (%d); particle state skipped.\n",
-                        att_nwq, Num_WQ_Vars);
+                        att_ptm_vars, Num_PTM_Vars);
             } else {
                 int _id;
                 RST_CHECK(nc_inq_varid(ncid, "ptm_stat", &_id));

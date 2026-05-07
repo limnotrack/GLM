@@ -317,6 +317,7 @@ SUBROUTINE aed_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
    cc = 0.         !# initialise to zero
 
    CALL set_c_wqvars_ptr(cc)
+   IF (n_vars_ben > 0) CALL set_c_wqsvars_ptr(cc(n_vars+1, 1))
 
    print "(5X,'Configured AED variables to simulate:')"
 
@@ -1655,6 +1656,46 @@ INTEGER FUNCTION WQVar_Index(name)
    ENDDO
    WQVar_Index = -1
 END FUNCTION WQVar_Index
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+!###############################################################################
+SUBROUTINE aed_get_var_names(wbuf, wlen, bbuf, blen) BIND(C, name="aed_get_var_names")
+!-------------------------------------------------------------------------------
+! Fill comma-separated C strings with all water-column and benthic WQ state
+! variable names in their AED index order (matching rows of wq_vars / wqs_vars).
+!-------------------------------------------------------------------------------
+!ARGUMENTS
+   CCHARACTER, INTENT(out) :: wbuf(*), bbuf(*)
+   CINTEGER,   INTENT(out) :: wlen, blen
+!LOCALS
+   TYPE(aed_variable_t), POINTER :: tvar
+   INTEGER :: i, j, nlen, w, b
+!
+!-------------------------------------------------------------------------------
+!BEGIN
+   w = 0 ; b = 0
+   DO i=1,n_aed_vars
+      IF ( aed_get_var(i, tvar) ) THEN
+         IF ( tvar%var_type == V_STATE ) THEN
+            nlen = LEN_TRIM(tvar%name)
+            IF ( .NOT. tvar%sheet ) THEN
+               IF (w > 0) THEN ; wbuf(w+1) = ',' ; w = w+1 ; ENDIF
+               DO j=1,nlen ; wbuf(w+j) = tvar%name(j:j) ; ENDDO
+               w = w + nlen
+            ELSE
+               IF (b > 0) THEN ; bbuf(b+1) = ',' ; b = b+1 ; ENDIF
+               DO j=1,nlen ; bbuf(b+j) = tvar%name(j:j) ; ENDDO
+               b = b + nlen
+            ENDIF
+         ENDIF
+      ENDIF
+   ENDDO
+   wbuf(w+1) = ACHAR(0)
+   bbuf(b+1) = ACHAR(0)
+   wlen = w
+   blen = b
+END SUBROUTINE aed_get_var_names
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 

@@ -281,6 +281,7 @@ AED_REAL *WQDS_Vars = NULL;  //# water quality diagnostic benthic array, [nvars]
 
 int *PTM_Stat = NULL;  //# water quality array, [nlayers, nvars]
 AED_REAL *PTM_Vars = NULL;  //# water quality array, [nlayers, nvars]
+int Num_PTM_Vars = 0;  //# number of AED particle-tracked WQ variables (n_ptm_vars)
 
 //------------------------------------------------------------------------------
 //  These for debugging
@@ -289,12 +290,14 @@ CLOGICAL dbg_mix = FALSE;   //# debug output from mixer
 CLOGICAL no_evap = FALSE;   //# turn off evaporation
 int      quiet   = 0;       //# turn down output messages
 
-void set_c_wqvars_ptr(AED_REAL *iwqv) { WQ_Vars = iwqv; }
+void set_c_wqvars_ptr(AED_REAL *iwqv)  { WQ_Vars  = iwqv; }
+void set_c_wqsvars_ptr(AED_REAL *iwqsv) { WQS_Vars = iwqsv; }
 void set_c_wqdvars_ptr(AED_REAL *iwqd, AED_REAL *iwqds, int *nwqd, int *nwqds)
 { WQD_Vars = iwqd; WQDS_Vars = iwqds; Num_WQD_Vars = *nwqd; Num_WQDS_Vars = *nwqds; }
 
 void set_c_ptmstat_ptr(int *iptms) { PTM_Stat = iptms; }
 void set_c_ptmenv_ptr(AED_REAL *iptmv) { PTM_Vars = iptmv; }
+void set_c_num_ptm_vars(int *n) { Num_PTM_Vars = *n; }
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
