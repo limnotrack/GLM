@@ -128,9 +128,9 @@ typedef char filname[80];
        CINTEGER NoIns;
        CINTEGER InPar[MaxPar];
 
-       AED_REAL SubmElev;        // elevation of inflow
+       AED_REAL SubmHeight;       // height above lake bottom of submerged inflow
        LOGICAL  SubmFlag;        // Is this a submerged inflow
-       LOGICAL  SubmElevDynamic; // Is this dynamic elevation
+       LOGICAL  SubmHeightDynamic; // Is this dynamic height from CSV
 
        AED_REAL ParticleConc;    // particle concentration
    } InflowDataType;
@@ -151,8 +151,8 @@ typedef char filname[80];
        CINTEGER DrawnFrom;       // layer index where last drawn
        AED_REAL Factor;          // scaling factor for outflow
        LOGICAL  FloatOff;        // Is this a floating offtake
-       AED_REAL SubmElev;        // submerged outflow elevation (height from bottom)
-       LOGICAL  SubmElevDynamic; // Is this dynamic elevation from CSV
+       AED_REAL SubmElev;         // submerged outflow elevation (above sea level)
+       LOGICAL  SubmElevDynamic;  // Is this dynamic elevation from CSV
        AED_REAL *WQ_Outflow;     // WQ variables collected from outflow layer
    } OutflowDataType;
 

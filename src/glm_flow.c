@@ -950,7 +950,7 @@ AED_REAL do_inflows()
                 //# adjust layer properties including water quality variables
                 //# Get layer number at submerged inflow level
                 for (Layer_subm = botmLayer; Layer_subm <= surfLayer; Layer_subm++)
-                    if (Lake[Layer_subm].Height >= Inflows[iRiver].SubmElev) break;
+                    if (Lake[Layer_subm].Height >= Inflows[iRiver].SubmHeight) break;
 
                 Lake[Layer_subm].Temp = combine(Lake[Layer_subm].Temp, Lake[Layer_subm].LayerVol, Lake[Layer_subm].Density,
                                                Inflows[iRiver].TemInf, (Inflows[iRiver].FlowRate*Inflows[iRiver].Factor),

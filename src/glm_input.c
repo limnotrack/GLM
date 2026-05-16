@@ -127,7 +127,7 @@ void read_daily_inflow(int julian, int NumInf, AED_REAL *flow,
         if ( inf[i].elev_idx != -1 )
             elev[i] = get_csv_val_r(csv,inf[i].elev_idx);
         else
-            elev[i] = Inflows[i].SubmElev;
+            elev[i] = Inflows[i].SubmHeight;
 
         for (j = 0; j < n_invars; j++) {
             if (inf[i].wq_vars[j] < 0) k = j;
@@ -622,7 +622,7 @@ void open_inflow_file(int idx, const char *fname, const char *timefmt)
     } else {
         inf[idx].elev_idx = -1;
     }
-    Inflows[idx].SubmElevDynamic = (inf[idx].elev_idx >= 0);
+    Inflows[idx].SubmHeightDynamic = (inf[idx].elev_idx >= 0);
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 

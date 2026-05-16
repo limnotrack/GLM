@@ -342,7 +342,7 @@ void do_model(int jstart, int nsave)
             Inflows[i].FlowRate = (FlowOld[i] + FlowNew[i]) / 2.0 * day_fraction * iSecsPerDay;
             Inflows[i].TemInf   = (TempOld[i] + TempNew[i]) / 2.0;
             Inflows[i].SalInf   = (SaltOld[i] + SaltNew[i]) / 2.0;
-            Inflows[i].SubmElev = Elev[i];
+            Inflows[i].SubmHeight = Elev[i];
             for (j = 0; j < Num_WQ_Vars; j++) {
                 Inflows[i].WQInf[j] = (WQ_INF_(WQOld,i, j) + WQ_INF_(WQNew, i, j)) / 2.0;
             }
@@ -533,7 +533,7 @@ void do_model_non_avg(int jstart, int nsave)
             Inflows[i].FlowRate = FlowNew[i] * day_fraction * iSecsPerDay;
             Inflows[i].TemInf   = TempNew[i];
             Inflows[i].SalInf   = SaltNew[i];
-            Inflows[i].SubmElev = Elev[i];
+            Inflows[i].SubmHeight = Elev[i];
             for (j = 0; j < Num_WQ_Vars; j++) {
                 Inflows[i].WQInf[j] = WQ_INF_(WQNew, i, j);
             }

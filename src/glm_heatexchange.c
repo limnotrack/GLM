@@ -118,13 +118,13 @@ void heat_pump_insert_inflow()
         }
     }
 
-    // Get the injection elevation from the inflow configuration
-    AED_REAL inject_elev = Inflows[heat_pump_inflow_idx].SubmElev;
+    // Get the injection height above lake bottom from the inflow configuration
+    AED_REAL inject_height = Inflows[heat_pump_inflow_idx].SubmHeight;
 
-    // Find the layer at injection elevation
+    // Find the layer at injection height above lake bottom
     int Layer_inject;
     for (Layer_inject = botmLayer; Layer_inject <= surfLayer; Layer_inject++) {
-        if (Lake[Layer_inject].Height >= inject_elev) break;
+        if (Lake[Layer_inject].Height >= inject_height) break;
     }
     if (Layer_inject > surfLayer) Layer_inject = surfLayer;
 
@@ -179,12 +179,12 @@ void heat_pump_insert_inflow()
         // Show injection info
         if (heat_pump_switch == 1) {
             printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, elev=%5.1f m, T=%5.1f°C (ΔT=%+6.2f°C)\n",
-                   stored_jday, stored_flow_rate, inject_elev, heated_temp, -temp_change_value);
+                   stored_jday, stored_flow_rate, inject_height, heated_temp, -temp_change_value);
         } else if (heat_pump_switch == 2) {
             AED_REAL current_heat_flux = (heat_pump_dynamic_heat_flux != 0.0) ?
                                         heat_pump_dynamic_heat_flux : heat_pump_heat_flux;
             printf("Heat pump injecting  at jday %d: Q=%8.4f m³/d, elev=%5.1f m, T=%5.1f°C (ΔT=%+6.3f°C, %5.0fW)\n",
-                   stored_jday, stored_flow_rate, inject_elev, heated_temp, -temp_change_value, current_heat_flux);
+                   stored_jday, stored_flow_rate, inject_height, heated_temp, -temp_change_value, current_heat_flux);
         }
     }
 
@@ -246,7 +246,7 @@ void check_heat_pump_config()
         // This allows cooler/denser water to find its neutral buoyancy level
         if (heat_pump_inflow_idx >= 0 && heat_pump_inflow_idx < NumInf) {
             Inflows[heat_pump_inflow_idx].SubmFlag        = FALSE;  // Use plunge dynamics
-            Inflows[heat_pump_inflow_idx].SubmElevDynamic = FALSE;
+            Inflows[heat_pump_inflow_idx].SubmHeightDynamic = FALSE;
         }
 
         // For outflow: respect the nml configuration (don't force dynamic)
