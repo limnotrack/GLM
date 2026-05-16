@@ -214,6 +214,10 @@ typedef char filname[80];
        AED_REAL dailyRain;       // Daily Rain (m3/day)
        AED_REAL dailyRunoff;     // Daily Runoff (m3/day)
        AED_REAL dailySnow;       // Daily Snow (m3/day)
+       AED_REAL Qsw;             // Shortwave radiation (W/m2)
+       AED_REAL Qe;              // Latent heat flux (W/m2)
+       AED_REAL Qh;              // Sensible heat flux (W/m2)
+       AED_REAL Qlw;             // Net longwave radiation (W/m2)
        AED_REAL dailyQsw;        // Daily Heat Flux (J/day)
        AED_REAL dailyQe;         // Daily Latent Heat(J/day)
        AED_REAL dailyQh;         // Daily Sensible Heat (J/day)
@@ -221,6 +225,7 @@ typedef char filname[80];
        AED_REAL dailyInflow;     // Total Daily Inflow (m3/day)
        AED_REAL dailyOutflow;    // Total Daily Outflow (m3/day)
        AED_REAL dailyOverflow;   // Total Daily Overflow (m3/day)
+       AED_REAL dailySeepage;    // Total Daily Seepage (m3/day)
        AED_REAL albedo;          // Daily surface albedo
        AED_REAL dailyzonL;       // Daily atmospheric stability
    } SurfaceDataType;

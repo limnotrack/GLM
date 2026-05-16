@@ -61,9 +61,10 @@ static int temp_id, salt_id, umean_id, uorb_id, epsilon_id;
 
 //# from lake.csv
 static int SA_id, VSnow_id,VBIce_id,VWIce_id, TotInVol_id, TotOutVol_id;
-static int OverFVol_id, Evap_id, Rain_id, LocRunoff_id, SnowF_id, LakeLvl_id;
+static int OverFVol_id, Evap_id, Rain_id, LocRunoff_id, SnowF_id, LakeLvl_id, Seep_id;
 static int SnowDns_id, Alb_id, MaxT_id, MinT_id, SfT_id, DQsw_id, DQe_id;
 static int DQh_id, DQlw_id, Light_id, BenLight_id, SWH_id, SWL_id, SWP_id;
+static int Qsw_id, Qe_id, Qh_id, Qlw_id;
 static int LkNum_id, maxdtz_id, CD_id, CHE_id, zL_id;
 
 #ifdef _WIN32
@@ -151,6 +152,7 @@ int init_glm_ncdf(const char *fn, const char *title, AED_REAL lat,
     check_nc_error(nc_def_var(ncid, "rain",                NC_REALTYPE, 3, dims, &Rain_id));
     check_nc_error(nc_def_var(ncid, "local_runoff",        NC_REALTYPE, 3, dims, &LocRunoff_id));
     check_nc_error(nc_def_var(ncid, "snowfall",            NC_REALTYPE, 3, dims, &SnowF_id));
+    check_nc_error(nc_def_var(ncid, "seepage_vol",         NC_REALTYPE, 3, dims, &Seep_id));
     check_nc_error(nc_def_var(ncid, "lake_level",          NC_REALTYPE, 3, dims, &LakeLvl_id));
     check_nc_error(nc_def_var(ncid, "snow_density",        NC_REALTYPE, 3, dims, &SnowDns_id));
     check_nc_error(nc_def_var(ncid, "albedo",              NC_REALTYPE, 3, dims, &Alb_id));
@@ -161,6 +163,10 @@ int init_glm_ncdf(const char *fn, const char *title, AED_REAL lat,
     check_nc_error(nc_def_var(ncid, "daily_qe",            NC_REALTYPE, 3, dims, &DQe_id));
     check_nc_error(nc_def_var(ncid, "daily_qh",            NC_REALTYPE, 3, dims, &DQh_id));
     check_nc_error(nc_def_var(ncid, "daily_qlw",           NC_REALTYPE, 3, dims, &DQlw_id));
+    check_nc_error(nc_def_var(ncid, "Qsw",                 NC_REALTYPE, 3, dims, &Qsw_id));
+    check_nc_error(nc_def_var(ncid, "Qe",                  NC_REALTYPE, 3, dims, &Qe_id));
+    check_nc_error(nc_def_var(ncid, "Qh",                  NC_REALTYPE, 3, dims, &Qh_id));
+    check_nc_error(nc_def_var(ncid, "Qlw",                 NC_REALTYPE, 3, dims, &Qlw_id));
     check_nc_error(nc_def_var(ncid, "light",               NC_REALTYPE, 3, dims, &Light_id));
     check_nc_error(nc_def_var(ncid, "benthic_light",       NC_REALTYPE, 3, dims, &BenLight_id));
     check_nc_error(nc_def_var(ncid, "surface_wave_height", NC_REALTYPE, 3, dims, &SWH_id));
@@ -234,6 +240,7 @@ int init_glm_ncdf(const char *fn, const char *title, AED_REAL lat,
     set_nc_attributes(ncid, Rain_id,      "m3",      "Rain"                 PARAM_FILLVALUE);
     set_nc_attributes(ncid, LocRunoff_id, "m3",      "Local Runoff"         PARAM_FILLVALUE);
     set_nc_attributes(ncid, SnowF_id,     "m3",      "Snowfall"             PARAM_FILLVALUE);
+    set_nc_attributes(ncid, Seep_id,      "m3",      "Seepage Volume"       PARAM_FILLVALUE);
     set_nc_attributes(ncid, LakeLvl_id,   "meters",  "Lake Level"           PARAM_FILLVALUE);
     set_nc_attributes(ncid, SnowDns_id,   "unknown", "Snow Density"         PARAM_FILLVALUE);
     set_nc_attributes(ncid, Alb_id,       "unknown", "Surface Albedo"       PARAM_FILLVALUE);
@@ -244,6 +251,10 @@ int init_glm_ncdf(const char *fn, const char *title, AED_REAL lat,
     set_nc_attributes(ncid, DQe_id,       "unknown", "Daily Qe"             PARAM_FILLVALUE);
     set_nc_attributes(ncid, DQh_id,       "unknown", "Daily Qh"             PARAM_FILLVALUE);
     set_nc_attributes(ncid, DQlw_id,      "unknown", "Daily Qlw"            PARAM_FILLVALUE);
+    set_nc_attributes(ncid, Qsw_id,       "W/m2",   "Shortwave Radiation"  PARAM_FILLVALUE);
+    set_nc_attributes(ncid, Qe_id,        "W/m2",   "Latent Heat Flux"     PARAM_FILLVALUE);
+    set_nc_attributes(ncid, Qh_id,        "W/m2",   "Sensible Heat Flux"   PARAM_FILLVALUE);
+    set_nc_attributes(ncid, Qlw_id,       "W/m2",   "Net Longwave Flux"    PARAM_FILLVALUE);
     set_nc_attributes(ncid, Light_id,     "unknown", "Light"                PARAM_FILLVALUE);
     set_nc_attributes(ncid, BenLight_id,  "unknown", "Benthic Light"        PARAM_FILLVALUE);
     set_nc_attributes(ncid, SWH_id,       "meters",  "Surface Wave Height"  PARAM_FILLVALUE);
@@ -333,6 +344,11 @@ void write_glm_ncdf(int ncid, int wlev, int nlev, int stepnum, AED_REAL timestep
 
     store_nc_scalar(ncid,  i0_id, XYT_SHAPE, MetData.ShortWave);
     store_nc_scalar(ncid, wnd_id, XYT_SHAPE, MetData.WindSpeed);
+
+    store_nc_scalar(ncid, Qsw_id, XYT_SHAPE, SurfData.Qsw);
+    store_nc_scalar(ncid,  Qe_id, XYT_SHAPE, SurfData.Qe);
+    store_nc_scalar(ncid,  Qh_id, XYT_SHAPE, SurfData.Qh);
+    store_nc_scalar(ncid, Qlw_id, XYT_SHAPE, SurfData.Qlw);
 
     store_nc_scalar(ncid,  TV_id, XYT_SHAPE, LakeVolume);
 
@@ -452,6 +468,7 @@ void write_glm_diag_ncdf(int ncid, AED_REAL LakeNum,
     xyt_store_nc_scalar(ncid, Rain_id, SurfData.dailyRain);
     xyt_store_nc_scalar(ncid, LocRunoff_id, SurfData.dailyRunoff);
     xyt_store_nc_scalar(ncid, SnowF_id, SurfData.dailySnow);
+    xyt_store_nc_scalar(ncid, Seep_id, SurfData.dailySeepage);
     xyt_store_nc_scalar(ncid, LakeLvl_id, lake_level);
 
 //  write_csv_lake("Blue Ice Thickness", SurfData.delzBlueIce);

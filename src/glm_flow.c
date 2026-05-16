@@ -533,7 +533,8 @@ AED_REAL do_outflows(int jday, AED_REAL day_fraction)
             // 0.95 added since the effective area of seeping is probably
             // a bit less than max area of water innundation???
             SeepDraw = -seepage_rate * Lake[surfLayer].LayerArea * 0.95 * day_fraction;
-      }
+        }
+        SurfData.dailySeepage += SeepDraw;
         do_single_outflow(0., SeepDraw, NULL);
     }
 
