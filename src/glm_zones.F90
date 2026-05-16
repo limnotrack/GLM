@@ -111,6 +111,11 @@ SUBROUTINE calc_zone_areas(areas, wlev, surf)
 
    zon = 1
    theZones(1)%zarea = areas(1)
+   IF ( zone_heights(1) > surf ) THEN
+      theZones(1)%z_pc_wet = surf / zone_heights(1)
+   ELSE
+      theZones(1)%z_pc_wet = 1.0
+   ENDIF
    DO lev=2, wlev
 !     IF ( lheights(lev) > zone_heights(zon) ) zon = zon + 1
 !
@@ -234,6 +239,7 @@ SUBROUTINE copy_to_zone(x_cc, x_diag, wlev)
       theZones%zsalt         = theZones%zsalt / zcount
       theZones%zrho          = theZones%zrho  / zcount
       theZones%zrad          = theZones%zrad  / zcount
+      theZones%zpar          = theZones%zpar  / zcount
       theZones%zvel          = theZones%zvel  / zcount
       theZones%zextc         = theZones%zextc / zcount
       theZones%zlayer_stress = theZones%zlayer_stress / zcount
@@ -242,6 +248,7 @@ SUBROUTINE copy_to_zone(x_cc, x_diag, wlev)
       theZones%zsalt         = 0.
       theZones%zrho          = 0.
       theZones%zrad          = 0.
+      theZones%zpar          = 0.
       theZones%zvel          = 0.
       theZones%zextc         = 0.
       theZones%zlayer_stress = 0.
@@ -346,7 +353,7 @@ SUBROUTINE copy_from_zone(n_aed_vars, x_cc, x_diag, x_diag_hz, wlev)
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(lev, j) = z_diag(j, 1, zon) * scale
+                        x_diag(j, lev) = z_diag(j, 1, zon) * scale
                      ENDIF
                   ENDIF
                ENDIF

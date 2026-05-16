@@ -460,6 +460,9 @@ CINTEGER FUNCTION aed_is_var(id,i_vname,len) BIND(C, name=_WQ_IS_VAR)
    INTEGER :: i, v, sv, d, sd
 !-------------------------------------------------------------------------------
 !BEGIN
+#ifndef PLOTS
+   IF (.FALSE.) PRINT *, id   !# id is only consumed when PLOTS is enabled
+#endif
    CALL make_string(vname, i_vname, len)
 
    v = 0; sv = 0; d = 0; sd = 0
