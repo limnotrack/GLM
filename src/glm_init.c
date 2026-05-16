@@ -338,7 +338,8 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     int             num_inflows    = 0;
     char          **names_of_strms = NULL;
     CLOGICAL       *subm_flag      = NULL;
-    AED_REAL       *subm_elev      = NULL;
+    AED_REAL       *subm_height    = NULL;
+    AED_REAL       *subm_elev      = NULL;   // deprecated alias for subm_height
     AED_REAL       *strm_hf_angle  = NULL;
     AED_REAL       *strmbd_slope   = NULL;
     AED_REAL       *strmbd_drag    = NULL;
@@ -355,6 +356,7 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "num_inflows",       TYPE_INT,              &num_inflows          },
           { "names_of_strms",    TYPE_STR|MASK_LIST,    &names_of_strms       },
           { "subm_flag",         TYPE_BOOL|MASK_LIST,   &subm_flag            },
+          { "subm_height",       TYPE_DOUBLE|MASK_LIST, &subm_height          },
           { "subm_elev",         TYPE_DOUBLE|MASK_LIST, &subm_elev            },
           { "strm_hf_angle",     TYPE_DOUBLE|MASK_LIST, &strm_hf_angle        },
           { "strmbd_slope",      TYPE_DOUBLE|MASK_LIST, &strmbd_slope         },
@@ -1092,9 +1094,14 @@ for (i = 0; i < n_zones; i++) {
         }
         NumInf = num_inflows;
 
+        if (subm_height == NULL && subm_elev != NULL) {
+            fprintf(stderr, "     WARNING: 'subm_elev' is deprecated; please rename to 'subm_height' in &inflow\n");
+            subm_height = subm_elev;
+        }
+
         for (i = 0; i < NumInf; i++) {
             Inflows[i].SubmFlag = (subm_flag != NULL)?subm_flag[i]:FALSE;
-            Inflows[i].SubmElev = (subm_elev != NULL)?subm_elev[i]:0.0;
+            Inflows[i].SubmHeight = (subm_height != NULL)?subm_height[i]:0.0;
             Inflows[i].Alpha = strm_hf_angle[i] * Pi/PiDeg;
             Inflows[i].Phi = strmbd_slope[i] * Pi/PiDeg;
             Inflows[i].DragCoeff = strmbd_drag[i];
@@ -1114,7 +1121,7 @@ for (i = 0; i < n_zones; i++) {
         }
         for (i = 0; i < gw_mode; i++) {
             Inflows[num_inflows+i].SubmFlag = TRUE;
-            Inflows[num_inflows+i].SubmElev = 0.05 + base_elev;
+            Inflows[num_inflows+i].SubmHeight = 0.05;
             Inflows[num_inflows+i].Factor = 1.0;
             Inflows[num_inflows+i].Alpha = 0.0;
             Inflows[num_inflows+i].Phi = 0.0;
@@ -1141,6 +1148,7 @@ for (i = 0; i < n_zones; i++) {
         NumOut = num_outlet;
         if (num_outlet<=0) num_outlet=1; // BEWARE: num_outlet is only used now for malloc
                                          // remove this if you use it for anything else!!
+
         if ( flt_off_sw == NULL ) {
             need_free = TRUE;
             flt_off_sw = malloc(sizeof(CLOGICAL)*num_outlet);

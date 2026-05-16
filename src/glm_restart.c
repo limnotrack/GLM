@@ -15,7 +15,7 @@
  *     u_f, u0, u_avg, Mixer_Count)                                           *
  *   - Benthic WQ sheet variables (WQS_Vars, Num_WQ_Ben)                     *
  *   - Per-inflow insertion queue (DOld, QIns, TIns, SIns, DIIns, InPar,     *
- *     NoIns, iCnt, SubmElev, WQIns)                                         *
+ *     NoIns, iCnt, SubmHeight, WQIns)                                        *
  *   - Sediment layer temps per zone when sed_heat_model == 2                *
  *   - Particle (PTM) state: PTM_Stat and PTM_Vars (when ptm_sw is TRUE)     *
  *                                                                            *
@@ -412,7 +412,7 @@ void write_glm_restart(const char *fn)
         RST_CHECK(nc_put_var_int(ncid, id_noins, ivec));
         for (int s = 0; s < NumInf; s++) ivec[s] = Inflows[s].iCnt;
         RST_CHECK(nc_put_var_int(ncid, id_icnt, ivec));
-        for (int s = 0; s < NumInf; s++) svec[s] = Inflows[s].SubmElev;
+        for (int s = 0; s < NumInf; s++) svec[s] = Inflows[s].SubmHeight;
         RST_CHECK(nc_put_var_double(ncid, id_submelev, svec));
 
         /* WQIns [NumInf, MaxPar, Num_WQ_Vars] */
@@ -661,7 +661,7 @@ int read_glm_restart(const char *fn)
 
             RST_CHECK(nc_inq_varid(ncid, "inflow_submelev", &_id));
             RST_CHECK(nc_get_var_double(ncid, _id, svec));
-            for (int s = 0; s < NumInf; s++) Inflows[s].SubmElev = svec[s];
+            for (int s = 0; s < NumInf; s++) Inflows[s].SubmHeight = svec[s];
         }
 
         if (wq_calc && Num_WQ_Vars > 0) {

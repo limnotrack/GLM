@@ -274,8 +274,13 @@ void do_model(int jstart, int nsave)
     ***************************************************************************/
     AED_REAL SaltNew[MaxInf], TempNew[MaxInf], WQNew[MaxInf * MaxVars];
     AED_REAL SaltOld[MaxInf], TempOld[MaxInf], WQOld[MaxInf * MaxVars];
+    // NOTE: despite the name, Elev[] holds inflow HEIGHT above the lake bottom
+    // (same units as InflowDataType.SubmHeight / NML subm_height), NOT elevation
+    // above sea level.  The name and the CSV column ("elev") are legacy from when
+    // the field was called SubmElev.  The CSV column name is kept to avoid breaking
+    // existing user inflow files.
     AED_REAL Elev[MaxInf];
-    AED_REAL ElevOut[MaxOut];     // Outflow elevation array for Type 6 submerged outflow support
+    AED_REAL ElevOut[MaxOut];     // Outflow elevation (above sea level) for Type 6 submerged outflow
     AED_REAL HeatFluxOut[MaxOut]; // Outflow heat flux array for dynamic heat pump support
     int jday, ntot, stepnum, stoptime;
     int i, j;
@@ -342,7 +347,7 @@ void do_model(int jstart, int nsave)
             Inflows[i].FlowRate = (FlowOld[i] + FlowNew[i]) / 2.0 * day_fraction * iSecsPerDay;
             Inflows[i].TemInf   = (TempOld[i] + TempNew[i]) / 2.0;
             Inflows[i].SalInf   = (SaltOld[i] + SaltNew[i]) / 2.0;
-            Inflows[i].SubmElev = Elev[i];
+            Inflows[i].SubmHeight = Elev[i];
             for (j = 0; j < Num_WQ_Vars; j++) {
                 Inflows[i].WQInf[j] = (WQ_INF_(WQOld,i, j) + WQ_INF_(WQNew, i, j)) / 2.0;
             }
@@ -483,8 +488,13 @@ void do_model_non_avg(int jstart, int nsave)
     *           look into that later ....                                     *
     ***************************************************************************/
     AED_REAL SaltNew[MaxInf], TempNew[MaxInf], WQNew[MaxInf * MaxVars];
+    // NOTE: despite the name, Elev[] holds inflow HEIGHT above the lake bottom
+    // (same units as InflowDataType.SubmHeight / NML subm_height), NOT elevation
+    // above sea level.  The name and the CSV column ("elev") are legacy from when
+    // the field was called SubmElev.  The CSV column name is kept to avoid breaking
+    // existing user inflow files.
     AED_REAL Elev[MaxInf];
-    AED_REAL ElevOut[MaxOut];     // Outflow elevation array for Type 6 submerged outflow support
+    AED_REAL ElevOut[MaxOut];     // Outflow elevation (above sea level) for Type 6 submerged outflow
     AED_REAL HeatFluxOut[MaxOut]; // Outflow heat flux array for dynamic heat pump support
 
     /*------------------------------------------------------------------------*/
@@ -533,7 +543,7 @@ void do_model_non_avg(int jstart, int nsave)
             Inflows[i].FlowRate = FlowNew[i] * day_fraction * iSecsPerDay;
             Inflows[i].TemInf   = TempNew[i];
             Inflows[i].SalInf   = SaltNew[i];
-            Inflows[i].SubmElev = Elev[i];
+            Inflows[i].SubmHeight = Elev[i];
             for (j = 0; j < Num_WQ_Vars; j++) {
                 Inflows[i].WQInf[j] = WQ_INF_(WQNew, i, j);
             }
