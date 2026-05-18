@@ -353,7 +353,7 @@ SUBROUTINE copy_from_zone(n_aed_vars, x_cc, x_diag, x_diag_hz, wlev)
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(j, lev) = z_diag(j, 1, zon) * scale
+                        x_diag(lev, j) = z_diag(j, 1, zon) * scale
                      ENDIF
                   ENDIF
                ENDIF

@@ -396,7 +396,7 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(:,lev) = x_diag(:,lev) + (z_diag(:,1,zon) * (1.0 - scale))
+                        x_diag(j,lev) = x_diag(j,lev) + (z_diag(j,1,zon) * (1.0 - scale))
                      ENDIF
                   ENDIF
                ENDIF
@@ -414,7 +414,7 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(:,lev) = z_diag(:,1,zon)
+                        x_diag(j,lev) = z_diag(j,1,zon)
                      ENDIF
                   ENDIF
                ENDIF
