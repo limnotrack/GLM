@@ -193,7 +193,7 @@ void do_ptm_update()
     // Loop through sub-timesteps, incrementing position
     sub_steps = 60;
     dt = 1;
-    for (tt = 1; tt < sub_steps; tt++) {
+    for (tt = 0; tt < sub_steps; tt++) {
         for (p = 0; p < max_particle_num; p++) {
           if (_PTM_Stat(pg,p,STAT)>0) {
 
@@ -205,17 +205,14 @@ void do_ptm_update()
             // Update particle position based on diffusivity and vert velocity
             _PTM_Stat(pg,p,FLAG)= WATER;
             K_z = Lake[_PTM_Stat(pg,p,LAYR)].Epsilon;
-            K_above = Lake[_PTM_Stat(pg,p+1,LAYR)].Epsilon;
-
-            // determine whether to assume molecular diffusion K
             if (K_z < ptm_diffusivity) K_z = ptm_diffusivity;
-
-            if (K_above < ptm_diffusivity) K_above = ptm_diffusivity;
 
             if(_PTM_Stat(pg,p,LAYR) == surfLayer){
                 K_prime_z = 0;
                 continue;
             } else {
+                K_above = Lake[_PTM_Stat(pg,p,LAYR)+1].Epsilon;
+                if (K_above < ptm_diffusivity) K_above = ptm_diffusivity;
                 K_prime_z = fabs(K_z - K_above);
             }
 
