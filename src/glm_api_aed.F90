@@ -610,9 +610,9 @@ SUBROUTINE api_clean_glm()                           BIND(C, name=_WQ_CLEAN_GLM)
    CALL aed_clean_model()
    ! Deallocate internal arrays
 !  IF (ALLOCATED(cc))         DEALLOCATE(cc)   !# left allocated: shared with C side
-   IF (ASSOCIATED(cc_hz))     NULLIFY(cc_hz)
-   IF (ALLOCATED(cc_diag))    DEALLOCATE(cc_diag)
-   IF (ALLOCATED(cc_diag_hz)) DEALLOCATE(cc_diag_hz)
+!   IF (ASSOCIATED(cc_hz))     NULLIFY(cc_hz)
+!   IF (ALLOCATED(cc_diag))    DEALLOCATE(cc_diag)
+!   IF (ALLOCATED(cc_diag_hz)) DEALLOCATE(cc_diag_hz)
    IF (ALLOCATED(par))        DEALLOCATE(par)
    IF (ALLOCATED(nir))        DEALLOCATE(nir)
    IF (ALLOCATED(uva))        DEALLOCATE(uva)
