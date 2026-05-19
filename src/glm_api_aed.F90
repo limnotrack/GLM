@@ -106,7 +106,7 @@ MODULE glm_api_aed
    AED_REAL,DIMENSION(:),  ALLOCATABLE,TARGET :: cc_diag_hz
 
    LOGICAL,TARGET :: actv = .TRUE.
-   INTEGER,TARGET :: botidx = 1, topidx
+   INTEGER,TARGET :: botidx = 1, topidx = 0
 
    !# Arrays for work, vertical movement, and cross-boundary fluxes
    AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: dz
@@ -319,7 +319,7 @@ SUBROUTINE api_set_glm_env()
    IF (status /= 0) STOP 'allocate_memory(): Error allocating (feedback)'
    feedback = zero_
 
-   matz = 0
+   matz = zero_
 
    timestep = dt
 
@@ -561,10 +561,11 @@ SUBROUTINE api_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
 !LOCALS
    LOGICAL :: doSurface
    INTEGER :: lev, zon
-   AED_REAL :: surf, pa = 0.
+   AED_REAL :: surf, pa
 !
 !-------------------------------------------------------------------------------
 !BEGIN
+   pa = zero_
    topidx = wlev ; botidx = 1
    col_area = area(wlev)
 
@@ -608,10 +609,10 @@ SUBROUTINE api_clean_glm()                           BIND(C, name=_WQ_CLEAN_GLM)
 !BEGIN
    CALL aed_clean_model()
    ! Deallocate internal arrays
-!  IF (ALLOCATED(cc))         DEALLOCATE(cc)
-!  IF (ALLOCATED(cc_hz))      DEALLOCATE(cc_hz)
-!  IF (ALLOCATED(cc_diag))    DEALLOCATE(cc_diag)
-!  IF (ALLOCATED(cc_diag_hz)) DEALLOCATE(cc_diag_hz)
+!  IF (ALLOCATED(cc))         DEALLOCATE(cc)   !# left allocated: shared with C side
+!   IF (ASSOCIATED(cc_hz))     NULLIFY(cc_hz)
+!   IF (ALLOCATED(cc_diag))    DEALLOCATE(cc_diag)
+!   IF (ALLOCATED(cc_diag_hz)) DEALLOCATE(cc_diag_hz)
    IF (ALLOCATED(par))        DEALLOCATE(par)
    IF (ALLOCATED(nir))        DEALLOCATE(nir)
    IF (ALLOCATED(uva))        DEALLOCATE(uva)
@@ -620,6 +621,15 @@ SUBROUTINE api_clean_glm()                           BIND(C, name=_WQ_CLEAN_GLM)
    IF (ALLOCATED(dz))         DEALLOCATE(dz)
    IF (ALLOCATED(tss))        DEALLOCATE(tss)
    IF (ALLOCATED(depth))      DEALLOCATE(depth)
+   IF (ASSOCIATED(sed_zones)) DEALLOCATE(sed_zones)
+   IF (ALLOCATED(feedback))   DEALLOCATE(feedback)
+   IF (ALLOCATED(externalid)) DEALLOCATE(externalid)
+   IF (ALLOCATED(zexternalid))DEALLOCATE(zexternalid)
+   IF (ALLOCATED(plot_id_v))  DEALLOCATE(plot_id_v)
+   IF (ALLOCATED(plot_id_sv)) DEALLOCATE(plot_id_sv)
+   IF (ALLOCATED(plot_id_d))  DEALLOCATE(plot_id_d)
+   IF (ALLOCATED(plot_id_sd)) DEALLOCATE(plot_id_sd)
+   IF (ALLOCATED(ptm_bla))    DEALLOCATE(ptm_bla)
 END SUBROUTINE api_clean_glm
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -722,10 +732,11 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
    INTEGER  :: z
 #endif
    AED_REAL :: val_out
-   FLOGICAL :: last = .FALSE.
+   FLOGICAL :: last
 !
 !-------------------------------------------------------------------------------
 !BEGIN
+   last = .FALSE.
    v = 0; d = 0; sv = 0; sd = 0
    DO i=1,n_aed_vars
       IF ( aed_get_var(i, tv) ) THEN
@@ -751,8 +762,8 @@ SUBROUTINE api_write_glm(ncid,wlev,nlev,lvl,point_nlevs) BIND(C, name=_WQ_WRITE_
 #endif
                DO j=1,point_nlevs
                   val_out = missing
-                  IF ((lvl(j) .EQ. wlev) .AND. tv%top) val_out = cc_diag(v, 1)
-                  IF ((lvl(j) .EQ. 0)    .AND. tv%bot) val_out = cc_diag(v, 1)
+                  IF ((lvl(j) .EQ. wlev) .AND. tv%top) val_out = cc_diag_hz(sd)
+                  IF ((lvl(j) .EQ. 0)    .AND. tv%bot) val_out = cc_diag_hz(sd)
                   CALL write_csv_point(j, tv%name, len_trim(tv%name), val_out, NULCSTR, 0, last=last)
                ENDDO
             ELSE  !# not sheet
@@ -858,6 +869,9 @@ SUBROUTINE api_get_var_names(wbuf, wlen, bbuf, blen) BIND(C, name="api_get_var_n
 !-------------------------------------------------------------------------------
 ! Fill comma-separated C strings with all water-column and benthic WQ state
 ! variable names in their AED index order (matching rows of wq_vars / wqs_vars).
+! Caller convention (strlen-style): wlen/blen are char counts excluding the
+! NUL terminator; wbuf/bbuf must be allocated to at least wlen+1 / blen+1 bytes
+! (the routine writes ACHAR(0) at wbuf(wlen+1) and bbuf(blen+1)).
 !-------------------------------------------------------------------------------
 !ARGUMENTS
    CCHARACTER, INTENT(out) :: wbuf(*), bbuf(*)

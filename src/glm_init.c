@@ -1330,10 +1330,12 @@ for (i = 0; i < n_zones; i++) {
     // This is where we could map inflow, met and csv_output vars to wq vars
 
     if ( wq_calc ) {
-        if ( inflow_vars == NULL && inflow_varnum > 3 ) {
+        if ( NumInf > 0 && inflow_vars == NULL && inflow_varnum > 3 ) {
             fprintf(stderr, "ERROR: %d inflow vars requested, but none provided\n", inflow_varnum);
             exit(1);
         }
+        if ( NumInf == 0 && (inflow_varnum > 0 || inflow_vars != NULL) )
+            fprintf(stderr, "     WARNING: inflow_varnum/inflow_vars set but num_inflows = 0; inflow WQ config will be ignored\n");
         for (j = 0; j < NumInf; j++)
             index_inflow_file(j, inflow_varnum, (const char **)inflow_vars);
 

@@ -449,6 +449,7 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
 
     //# Summarise total daily short wave radiation (J/day), stored for lake.csv
     SurfData.dailyQsw += Lake[surfLayer].LayerArea * Q_shortwave * noSecs;
+    SurfData.Qsw = Q_shortwave;
 
 
     // ---- MH TEST SOLPOND IN PROGRESS ---- //
@@ -759,6 +760,9 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
         SurfData.dailyQe += Q_latentheat * Lake[surfLayer].LayerArea * noSecs;
         SurfData.dailyQh += Q_sensibleheat * Lake[surfLayer].LayerArea * noSecs;
         SurfData.dailyQlw += Q_longwave * Lake[surfLayer].LayerArea * noSecs;
+        SurfData.Qe = Q_latentheat;
+        SurfData.Qh = Q_sensibleheat;
+        SurfData.Qlw = Q_longwave;
     } else {
         //---------------------------------------------------------------------+
         //# Ice cover specific computation:
@@ -941,6 +945,9 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
        SurfData.dailyQe += Q_latentheat * Lake[surfLayer].LayerArea * noSecs;
        SurfData.dailyQh += Q_sensibleheat * Lake[surfLayer].LayerArea * noSecs;
        SurfData.dailyQlw += Q_longwave * Lake[surfLayer].LayerArea * noSecs;
+       SurfData.Qe = Q_latentheat;
+       SurfData.Qh = Q_sensibleheat;
+       SurfData.Qlw = Q_longwave;
     }
 
     /***************************************************************************

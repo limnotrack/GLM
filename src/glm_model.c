@@ -331,8 +331,8 @@ void do_model(int jstart, int nsave)
         SurfData.dailyQh = 0.; SurfData.dailyQlw = 0.;
         SurfData.dailyInflow = 0.; SurfData.dailySnow = 0.;
         SurfData.dailyOutflow = 0.; SurfData.dailyOverflow = 0.;
-        SurfData.dailyzonL = 0.; SurfData.dailyRunoff = 0.;
-        SurfData.albedo = 1.;
+        SurfData.dailySeepage = 0.; SurfData.dailyzonL = 0.;
+        SurfData.dailyRunoff = 0.; SurfData.albedo = 1.;
 
         //# Read & set today's inflow properties
         read_daily_inflow(jday, NumInf, FlowNew, TempNew, SaltNew, Elev, WQNew);
@@ -529,8 +529,8 @@ void do_model_non_avg(int jstart, int nsave)
         SurfData.dailyQh      = 0.; SurfData.dailyQlw      = 0.;
         SurfData.dailyInflow  = 0.; SurfData.dailySnow     = 0.;
         SurfData.dailyOutflow = 0.; SurfData.dailyOverflow = 0.;
-        SurfData.dailyzonL    = 0.; SurfData.dailyRunoff   = 0.;
-        SurfData.albedo       = 1.;
+        SurfData.dailySeepage = 0.; SurfData.dailyzonL     = 0.;
+        SurfData.dailyRunoff  = 0.; SurfData.albedo        = 1.;
 
         //# Read & set today's inflow properties
         read_daily_inflow(jday, NumInf, FlowNew, TempNew, SaltNew, Elev, WQNew);
@@ -697,8 +697,8 @@ void do_model_coupled(int step_start, int step_end,
         SurfData.dailyQh = 0.; SurfData.dailyQlw = 0.;
         SurfData.dailyInflow = 0.; SurfData.dailySnow = 0.;
         SurfData.dailyOutflow = 0.; SurfData.dailyOverflow = 0.;
-        SurfData.dailyzonL = 0.; SurfData.dailyRunoff = 0.;
-        SurfData.albedo = 1.;
+        SurfData.dailySeepage = 0.; SurfData.dailyzonL = 0.;
+        SurfData.dailyRunoff = 0.; SurfData.albedo = 1.;
 
         //# Read & set today's inflow properties
     //  read_daily_inflow(jday, NumInf, FlowNew, TempNew, SaltNew, WQNew);

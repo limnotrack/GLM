@@ -139,6 +139,11 @@ SUBROUTINE api_calc_zone_areas(aedZones, n_zones, areas, wheights, wlev)
 
    zon = 1
    aedZones(1)%z_env%z_area = areas(1)
+   IF ( aedZones(1)%z_env%z_height > surf ) THEN
+      aedZones(1)%z_env%z_pc_wet = surf / aedZones(1)%z_env%z_height
+   ELSE
+      aedZones(1)%z_env%z_pc_wet = 1.0
+   ENDIF
    DO lev=2, wlev
       IF ( wheights(lev) > aedZones(zon)%z_env%z_height ) zon = zon + 1
 
@@ -240,6 +245,7 @@ SUBROUTINE api_copy_to_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag, 
       aedZones(zon)%z_env%z_salt         = aedZones(zon)%z_env%z_salt + theLake(lev)%Salinity
       aedZones(zon)%z_env%z_rho          = aedZones(zon)%z_env%z_rho  + theLake(lev)%Density
       aedZones(zon)%z_env%z_rad          = aedZones(zon)%z_env%z_rad  + theLake(lev)%Light
+      !aedZones(zon)%z_env%z_par          = aedZones(zon)%z_env%z_par  + theLake(lev)%Light*0.45
       aedZones(zon)%z_env%z_vel          = aedZones(zon)%z_env%z_vel  + theLake(lev)%Umean
       aedZones(zon)%z_env%z_extc         = aedZones(zon)%z_env%z_extc + theLake(lev)%ExtcCoefSW
       aedZones(zon)%z_env%z_layer_stress = aedZones(zon)%z_env%z_layer_stress + theLake(lev)%LayerStress
@@ -264,6 +270,7 @@ SUBROUTINE api_copy_to_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag, 
          aedZones(zon)%z_env%z_salt         = aedZones(zon)%z_env%z_salt / zcount(zon)
          aedZones(zon)%z_env%z_rho          = aedZones(zon)%z_env%z_rho  / zcount(zon)
          aedZones(zon)%z_env%z_rad          = aedZones(zon)%z_env%z_rad  / zcount(zon)
+         !aedZones(zon)%z_env%z_par          = aedZones(zon)%z_env%z_par  / zcount(zon)
          aedZones(zon)%z_env%z_vel          = aedZones(zon)%z_env%z_vel  / zcount(zon)
          aedZones(zon)%z_env%z_extc         = aedZones(zon)%z_env%z_extc / zcount(zon)
          aedZones(zon)%z_env%z_layer_stress = aedZones(zon)%z_env%z_layer_stress / zcount(zon)
@@ -272,6 +279,7 @@ SUBROUTINE api_copy_to_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag, 
          aedZones(zon)%z_env%z_salt         = 0.
          aedZones(zon)%z_env%z_rho          = 0.
          aedZones(zon)%z_env%z_rad          = 0.
+         !aedZones(zon)%z_env%z_par          = 0.
          aedZones(zon)%z_env%z_vel          = 0.
          aedZones(zon)%z_env%z_extc         = 0.
          aedZones(zon)%z_env%z_layer_stress = 0.
@@ -387,8 +395,8 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                IF ( tvar%var_type == V_DIAGNOSTIC ) THEN
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
-                     IF ( .NOT. tvar%zavg ) THEN
-                        x_diag(:,lev) = x_diag(:,lev) + (z_diag(:,lev,zon) * (1.0 - scale))
+                     IF ( tvar%zavg ) THEN
+                        x_diag(j,lev) = x_diag(j,lev) + (z_diag(j,1,zon) * (1.0 - scale))
                      ENDIF
                   ENDIF
                ENDIF
@@ -406,7 +414,7 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(:,lev) = z_diag(:,lev,zon)
+                        x_diag(j,lev) = z_diag(j,1,zon)
                      ENDIF
                   ENDIF
                ENDIF

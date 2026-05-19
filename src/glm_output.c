@@ -391,6 +391,7 @@ void write_diags(int jday, AED_REAL LakeNum)
     write_csv_lake("Rain",            SurfData.dailyRain,        NULL, FALSE);
     write_csv_lake("Local Runoff",    SurfData.dailyRunoff,      NULL, FALSE);
     write_csv_lake("Snowfall",        SurfData.dailySnow,        NULL, FALSE);
+    write_csv_lake("Seepage Vol",     SurfData.dailySeepage,     NULL, FALSE);
     write_csv_lake("Lake Level",      lake_level,                NULL, FALSE);
     write_csv_lake("Surface Area",    Lake[surfLayer].LayerArea, NULL, FALSE);
     write_csv_lake("Blue Ice Thickness", SurfData.delzBlueIce,   NULL, FALSE);
