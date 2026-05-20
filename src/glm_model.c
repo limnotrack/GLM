@@ -173,11 +173,19 @@ void init_model(int *jstart, int *nsave)
     //# Create the output files.
     init_output(*jstart, out_dir, out_fn, MaxLayers, Longitude, Latitude);
 
-    //# Calculate cumulative layer volumes from layer depths
-    resize_internals(1, botmLayer);
+    //# Calculate cumulative layer volumes from layer depths.
+    //# Skip when state was loaded from a restart file: the restart now
+    //# preserves LayerVol/LayerArea/Vol1/MeanHeight directly, and recomputing
+    //# them here from Heights introduces ~1e-12 roundoff drift vs. the
+    //# continuous run's stored values.
+    if (!Restart_loaded) resize_internals(1, botmLayer);
 
-    //# Check layers for vmax,vmin
-    check_layer_thickness();
+    //# Check layers for vmax,vmin.
+    //# Skip when state was loaded from a restart file: the saved state
+    //# already had subdaily-level check_layer_thickness run; invoking it
+    //# here on a partial-end restart would merge layers at an instant a
+    //# continuous run never visits, breaking bit-for-bit resume.
+    if (!Restart_loaded) check_layer_thickness();
 
     if(DepMX == 0.0) init_mixer();
 
@@ -291,6 +299,11 @@ void do_model(int jstart, int nsave)
     memset(WQNew, 0, sizeof(AED_REAL)*MaxInf*MaxVars);
     memset(WQOld, 0, sizeof(AED_REAL)*MaxInf*MaxVars);
 
+    /* See note in do_model_non_avg: a mid-day restart resume needs the loaded
+     * sub-daily state used verbatim; a midnight resume behaves like a normal
+     * day boundary. startTOD is read before do_subdaily_loop resets it. */
+    int resuming_midday = (Restart_loaded && startTOD > 0);
+
     /**************************** Start Simulation ****************************/
     fputs("\n     Simulation begins...\n", stdout);
 
@@ -305,6 +318,10 @@ void do_model(int jstart, int nsave)
     read_daily_met(jstart, &MetOld);
     MetData = MetOld;
     SWold = MetOld.ShortWave;
+    /* On a mid-day resume, seed SWold from the previous run's stop instant so
+     * iter-1's first sub-iter matches a continuous run (matters in non-subdaily
+     * mode; calculate_qsw ignores SWold when subdaily). */
+    if (resuming_midday) SWold = Restart_SWold;
 
     jday = jstart - 1;
 #ifdef PLOTS
@@ -323,7 +340,13 @@ void do_model(int jstart, int nsave)
         //# If it is the last day, adjust the stop time for the day if necessary
         if (ntot == nDates) stoptime = stopTOD;
         if (stoptime == 0) break;
-        day_fraction = (stoptime - startTOD) / iSecsPerDay;
+        //# See note in do_model_non_avg: on a mid-day resume, apply the full
+        //# day's end-of-iter lump (the previous run deferred the [0, startTOD]
+        //# portion).
+        if (resuming_midday && ntot == 1)
+            day_fraction = stoptime / iSecsPerDay;
+        else
+            day_fraction = (stoptime - startTOD) / iSecsPerDay;
 
         //# Initialise daily values for volume & heat balance reporting (lake.csv)
         SurfData.dailyRain = 0.; SurfData.dailyEvap = 0.;
@@ -376,7 +399,12 @@ void do_model(int jstart, int nsave)
         WithdrawalTemp = (WithdrTempOld + WithdrTempNew) / 2.0;
 
         read_daily_kw(jday, &DailyKw);
-        for (i = 0; i < MaxLayers; i++) Lake[i].ExtcCoefSW = DailyKw;
+        /* On a mid-day resume's first iter, keep the loaded ExtcCoefSW (it
+         * carries the bioshade_feedback contribution from the previous run);
+         * see note in glm_restart.c "lake_extc". A midnight resume resets
+         * normally, exactly as a continuous run does at a day boundary. */
+        if (!(resuming_midday && ntot == 1))
+            for (i = 0; i < MaxLayers; i++) Lake[i].ExtcCoefSW = DailyKw;
 
         //# Read & set today's meteorological data
         if (jday != jstart) read_daily_met(jday, &MetNew);
@@ -404,6 +432,13 @@ void do_model(int jstart, int nsave)
 
         //# End of forcing-mixing-diffusion loop
 
+        /* See note in do_model_non_avg: skip end-of-iter state mutations on a
+         * partial-end last iter when a restart will be written, so the writer
+         * and the resumer produce identical pre-end-of-iter state. */
+        int is_partial_end_with_restart =
+            (ntot == nDates) && (stoptime != iSecsPerDay) && (restart_fname != NULL);
+
+        if (!is_partial_end_with_restart) {
         //# Insert inflows for all streams
         SurfData.dailyInflow = do_inflows(); //# Do inflow for all streams
 
@@ -415,6 +450,7 @@ void do_model(int jstart, int nsave)
 
         //# Enforce layer limits
         check_layer_thickness();
+        }
 
         // # Write output on last time step within a day
         // # after including the inflow and outflows.
@@ -500,6 +536,16 @@ void do_model_non_avg(int jstart, int nsave)
     /*------------------------------------------------------------------------*/
     memset(WQNew, 0, sizeof(AED_REAL)*MaxInf*MaxVars);
 
+    /* "Mid-day resume": a restart was loaded AND the run starts part-way
+     * through a calendar day (startTOD>0). Only then does iter-1 continue a
+     * calendar day the previous run began — requiring the loaded sub-daily
+     * state to be used verbatim (no top-of-day resets) and the day's
+     * end-of-iter lump applied in full. A midnight resume (startTOD==0) begins
+     * a fresh calendar day and must behave exactly like a continuous run's
+     * day boundary, so none of these overrides apply. startTOD is read here
+     * before do_subdaily_loop resets it to 0. */
+    int resuming_midday = (Restart_loaded && startTOD > 0);
+
     /**************************** Start Simulation ****************************/
     fputs("\n     Simulation begins...\n", stdout);
 
@@ -507,6 +553,10 @@ void do_model_non_avg(int jstart, int nsave)
     stepnum = 0;
     stoptime = iSecsPerDay;
     SWold = 0.;
+    /* On a mid-day resume, seed SWold from the previous run's stop instant so
+     * iter-1's first sub-iter matches a continuous run (matters in non-subdaily
+     * mode; calculate_qsw ignores SWold when subdaily). */
+    if (resuming_midday) SWold = Restart_SWold;
 
     jday = jstart - 1;
 
@@ -521,7 +571,16 @@ void do_model_non_avg(int jstart, int nsave)
         //# If it is the last day, adjust the stop time for the day if necessary
         if (ntot == nDates) stoptime = stopTOD;
         if (stoptime == 0) break;
-        day_fraction = (stoptime - startTOD) / iSecsPerDay;
+        //# day_fraction scales the daily inflow/outflow/seepage/overflow lump
+        //# applied at the end of this calendar-day iter. On a mid-day resume the
+        //# previous run simulated the [0, startTOD] part of this day but deferred
+        //# its end-of-iter lump (partial-end ops skipped), so apply the full day's
+        //# lump here (as a continuous run does at this midnight) rather than only
+        //# the post-resume fraction.
+        if (resuming_midday && ntot == 1)
+            day_fraction = stoptime / iSecsPerDay;
+        else
+            day_fraction = (stoptime - startTOD) / iSecsPerDay;
 
         //# Initialise daily values for volume & heat balance reporting (lake.csv)
         SurfData.dailyRain    = 0.; SurfData.dailyEvap     = 0.;
@@ -575,7 +634,12 @@ void do_model_non_avg(int jstart, int nsave)
 
         //# Read & set today's Kw (if it is being read in)
         read_daily_kw(jday, &DailyKw);
-        for (i = 0; i < MaxLayers; i++) Lake[i].ExtcCoefSW = DailyKw;
+        /* On a mid-day resume's first iter, keep the loaded ExtcCoefSW (it
+         * carries the bioshade_feedback contribution from the previous run);
+         * see note in glm_restart.c "lake_extc". A midnight resume resets
+         * normally, exactly as a continuous run does at a day boundary. */
+        if (!(resuming_midday && ntot == 1))
+            for (i = 0; i < MaxLayers; i++) Lake[i].ExtcCoefSW = DailyKw;
 
         //# Read & set today's meteorological data
         read_daily_met(jday, &MetData);
@@ -587,6 +651,15 @@ void do_model_non_avg(int jstart, int nsave)
 
         //# End of forcing-mixing-diffusion loop
 
+        /* Skip end-of-iter state-mutating ops on a partial-end last iter when
+         * a restart will be written. Otherwise the post-subdaily check_layer_thickness
+         * (and overflow) mutate state at a mid-day instant that a continuous run
+         * never visits — breaking bit-for-bit restart. The same skip is applied
+         * on the writer and the resumer so they produce identical restart files. */
+        int is_partial_end_with_restart =
+            (ntot == nDates) && (stoptime != iSecsPerDay) && (restart_fname != NULL);
+
+        if (!is_partial_end_with_restart) {
          //# Insert inflows for all streams
         SurfData.dailyInflow = do_inflows();
 
@@ -600,6 +673,7 @@ void do_model_non_avg(int jstart, int nsave)
 
         //# Enforce layer limits
         check_layer_thickness();
+        }
 
         // # Write output on last time step within a day
         // # after including the inflow and outflows.
@@ -932,6 +1006,12 @@ int do_subdaily_loop(int stepnum, int jday, int stoptime, int nsave, AED_REAL SW
      * End of sub-daily loop                                                  *
      **************************************************************************/
 //  printf("end subdaily loop\n");
+
+    /* Capture the SWold value at loop exit — the value a continuing simulation
+     * would use as SWold on the next sub-iter. Saved to the restart so a
+     * non-subdaily mid-day resume matches a continuous run. (In subdaily mode
+     * SWold is unchanged inside the loop, so this just preserves it.) */
+    Restart_SWold = SWold;
 
 #ifdef PLOTS
     plotstep = 0;

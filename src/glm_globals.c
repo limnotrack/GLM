@@ -114,6 +114,9 @@ MetDataType* pMetData = &MetData;       //# pointer to Meteorological data
 SurfaceDataType SurfData;               //# Surface Data
 SurfaceDataType* pSurfData = &SurfData; //# pointer to Surface Data
 
+int Restart_loaded = 0;
+AED_REAL Restart_SWold = 0.0;
+
 int subdaily = FALSE;
 
 //------------------------------------------------------------------------------
