@@ -6,7 +6,8 @@
  *                                                                            *
  * State saved:                                                               *
  *   - Lake layer arrays (Temp, Salinity, Height, LayerVol, LayerArea,        *
- *     MeanHeight, Density, Epsilon, Umean, Uorb, LayerStress)               *
+ *     MeanHeight, Vol1, Density, Epsilon, Umean, Uorb, LayerStress,          *
+ *     ExtcCoefSW)                                                            *
  *   - WQ per-layer variables (WQ_Vars)                                       *
  *   - Surface state (AvgSurfTemp, delzBlueIce, delzWhiteIce, delzSnow,      *
  *     RhoSnow)                                                               *
@@ -164,9 +165,13 @@ void write_glm_restart(const char *fn)
     /* -------- define variables -------- */
 
     /* Lake layer arrays [nlev] */
-    /* lake_layervol, lake_layerarea, lake_meanheight are omitted: they are
-     * re-derived from Height via the morphometry table on the first timestep. */
+    /* layervol, layerarea, meanheight, vol1 are also saved here: although
+     * they're derivable from Height via the morphometry table, the values
+     * resize_internals re-computes from Heights at restart load differ from
+     * a continuous run's values by ~1e-12 (different order of operations),
+     * and that tiny drift compounds across sub-iters into ~1e-3 errors. */
     int id_temp, id_salt, id_height, id_dens, id_eps, id_umean, id_uorb, id_stress;
+    int id_extc, id_lvol, id_larea, id_mhgt, id_vol1;
     def_var_d(ncid, "lake_temp",        1, &dim_nlev, &id_temp);
     def_var_d(ncid, "lake_salt",        1, &dim_nlev, &id_salt);
     def_var_d(ncid, "lake_height",      1, &dim_nlev, &id_height);
@@ -175,6 +180,15 @@ void write_glm_restart(const char *fn)
     def_var_d(ncid, "lake_umean",       1, &dim_nlev, &id_umean);
     def_var_d(ncid, "lake_uorb",        1, &dim_nlev, &id_uorb);
     def_var_d(ncid, "lake_stress",      1, &dim_nlev, &id_stress);
+    /* ExtcCoefSW is updated each sub-iter when bioshade_feedback is on, so it
+     * carries WQ-feedback state across sub-iters. Must be saved to survive a
+     * mid-day restart; otherwise the resumer reads back the initial Kw and the
+     * very first sub-iter's surface-thermo light propagation diverges. */
+    def_var_d(ncid, "lake_extc",        1, &dim_nlev, &id_extc);
+    def_var_d(ncid, "lake_layervol",    1, &dim_nlev, &id_lvol);
+    def_var_d(ncid, "lake_layerarea",   1, &dim_nlev, &id_larea);
+    def_var_d(ncid, "lake_meanheight",  1, &dim_nlev, &id_mhgt);
+    def_var_d(ncid, "lake_vol1",        1, &dim_nlev, &id_vol1);
 
     /* WQ per-layer [wq_vars, nlev] (stored as flat [wq_vars * nlev]) */
     int id_wq = -1;
@@ -207,6 +221,14 @@ void write_glm_restart(const char *fn)
     def_var_d(ncid, "white_ice",        0, NULL, &id_white);
     def_var_d(ncid, "snow_thickness",   0, NULL, &id_snow);
     def_var_d(ncid, "rho_snow",         0, NULL, &id_rhosnow);
+
+    /* Sub-daily SWold snapshot — the SWold value at the last sub-iter executed
+     * in this run. Needed for a bit-for-bit mid-day resume in non-subdaily mode,
+     * where the first sub-iter would otherwise see the daily-read SWold rather
+     * than the value a continuous run had at that iclock. (No effect in subdaily
+     * mode, where calculate_qsw ignores SWold.) */
+    int id_rswold;
+    def_var_d(ncid, "restart_swold", 0, NULL, &id_rswold);
 
     /* Mixer scalars */
     int id_depmx, id_prevthick, id_eavail, id_oldslope;
@@ -287,6 +309,11 @@ void write_glm_restart(const char *fn)
     WRITE_LAKE_FIELD(id_umean,   Umean);
     WRITE_LAKE_FIELD(id_uorb,    Uorb);
     WRITE_LAKE_FIELD(id_stress,  LayerStress);
+    WRITE_LAKE_FIELD(id_extc,    ExtcCoefSW);
+    WRITE_LAKE_FIELD(id_lvol,    LayerVol);
+    WRITE_LAKE_FIELD(id_larea,   LayerArea);
+    WRITE_LAKE_FIELD(id_mhgt,    MeanHeight);
+    WRITE_LAKE_FIELD(id_vol1,    Vol1);
 #undef WRITE_LAKE_FIELD
 
     free(buf);
@@ -356,6 +383,9 @@ void write_glm_restart(const char *fn)
     RST_CHECK(nc_put_var_double(ncid, id_white,   &SurfData.delzWhiteIce));
     RST_CHECK(nc_put_var_double(ncid, id_snow,    &SurfData.delzSnow));
     RST_CHECK(nc_put_var_double(ncid, id_rhosnow, &SurfData.RhoSnow));
+
+    /* Sub-daily SWold (see note at definition above) */
+    RST_CHECK(nc_put_var_double(ncid, id_rswold,  &Restart_SWold));
 
     /* Mixer scalars */
     RST_CHECK(nc_put_var_double(ncid, id_depmx,    &DepMX));
@@ -543,6 +573,21 @@ int read_glm_restart(const char *fn)
         READ_LAKE_FIELD("lake_umean",      Umean);
         READ_LAKE_FIELD("lake_uorb",       Uorb);
         READ_LAKE_FIELD("lake_stress",     LayerStress);
+        /* Optional fields — gracefully tolerate older restart files. */
+#define OPT_LAKE_FIELD(varname, field) \
+        do { int _id; \
+             if (nc_inq_varid(ncid, varname, &_id) == NC_NOERR) { \
+                 RST_CHECK(nc_get_var_double(ncid, _id, buf)); \
+                 for (int _i = 0; _i < att_maxlayers; _i++) Lake[_i].field = buf[_i]; \
+             } \
+        } while (0)
+
+        OPT_LAKE_FIELD("lake_extc",       ExtcCoefSW);
+        OPT_LAKE_FIELD("lake_layervol",   LayerVol);
+        OPT_LAKE_FIELD("lake_layerarea",  LayerArea);
+        OPT_LAKE_FIELD("lake_meanheight", MeanHeight);
+        OPT_LAKE_FIELD("lake_vol1",       Vol1);
+#undef OPT_LAKE_FIELD
 #undef READ_LAKE_FIELD
 
         free(buf);
@@ -592,6 +637,13 @@ int read_glm_restart(const char *fn)
         RD_SCALAR_D("white_ice",      SurfData.delzWhiteIce);
         RD_SCALAR_D("snow_thickness", SurfData.delzSnow);
         RD_SCALAR_D("rho_snow",       SurfData.RhoSnow);
+
+        /* Sub-daily SWold — optional (older restart files may lack it). */
+        {
+            int _id;
+            if (nc_inq_varid(ncid, "restart_swold", &_id) == NC_NOERR)
+                RST_CHECK(nc_get_var_double(ncid, _id, &Restart_SWold));
+        }
 
         /* ---- Mixer scalars ---- */
         RD_SCALAR_D("mixer_dep_mx",             DepMX);
@@ -739,5 +791,6 @@ int read_glm_restart(const char *fn)
 
     nc_close(ncid);
     rst_ncid_ = -1;
+    Restart_loaded = 1;
     return 1;
 }

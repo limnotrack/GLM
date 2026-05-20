@@ -175,6 +175,20 @@ extern AED_REAL mol_diffusivity[];
 // SURFACE
 extern SurfaceDataType SurfData; //# Surface Data
 extern MetDataType MetData;      //# Meteorological data
+
+// Set when a restart file has been loaded this run. Gates the restart-resume
+// handling: skipping the init_model resize_internals/check_layer_thickness
+// (the saved derived layer fields are used verbatim), and the mid-day-resume
+// overrides in do_model / do_model_non_avg.
+extern int Restart_loaded;
+
+// Sub-daily-level SWold at the end of the last sub-iter executed in the
+// previous run. On a mid-day resume it seeds the first sub-iter's SWold so it
+// matches what a continuous run had at iclock=startTOD. Only consumed in
+// non-subdaily mode (subdaily=.false.), where calculate_qsw interpolates the
+// timestep's shortwave from yesterday's (SWold) and today's daily totals; in
+// subdaily mode calculate_qsw ignores SWold so this has no effect.
+extern AED_REAL Restart_SWold;
 extern AED_REAL runoff_coef;
 extern AED_REAL rain_threshold;
 extern CLOGICAL catchrain;
