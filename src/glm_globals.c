@@ -215,6 +215,13 @@ AED_REAL *sed_temp_amplitude = NULL;
 AED_REAL *sed_temp_peak_doy = NULL;
 AED_REAL *sed_reflectivity  = NULL;
 AED_REAL *sed_roughness     = NULL;
+// sed_heat_model == 2 (dynamic soil/sediment temperature model) configuration.
+// A single soil-column profile is shared across all zones; only the prognostic
+// temperature state and the per-zone deep boundary (sed_temp_mean) differ by zone.
+int       n_sed_layers      = 0;      //# total soil-column nodes N (incl. both boundaries)
+AED_REAL *sed_layer_depth   = NULL;   //# node depths below sediment surface (m), length N
+AED_REAL *sed_vwc           = NULL;   //# volumetric water content per node (length N, or 1)
+AED_REAL  sed_spinup_days   = 365.;   //# spin-up duration for InitialTemp (days)
 
 //------------------------------------------------------------------------------
 // GROUNDWATER

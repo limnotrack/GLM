@@ -311,6 +311,11 @@ extern AED_REAL *sed_temp_amplitude;
 extern AED_REAL *sed_temp_peak_doy;
 extern AED_REAL *sed_reflectivity;
 extern AED_REAL *sed_roughness;
+// sed_heat_model == 2 (dynamic soil/sediment temperature model)
+extern int      n_sed_layers;
+extern AED_REAL *sed_layer_depth;
+extern AED_REAL *sed_vwc;
+extern AED_REAL sed_spinup_days;
 
 /*----------------------------------------------------------------------------*/
 // GROUNDWATER

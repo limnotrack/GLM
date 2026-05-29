@@ -270,11 +270,16 @@ void write_glm_restart(const char *fn)
     }
 
     /* Sediment layer temps per zone [n_zones, sed_layers] when model==2 */
-    int id_sedtemp = -1, id_sedhf = -1;
+    int id_sedtemp = -1, id_sedhf = -1, id_zztemp = -1;
     if (n_sed_layers_rst > 0) {
         int dims_sz[2] = { dim_zones, dim_sedlayers };
         def_var_d(ncid, "sed_layer_temp", 2, dims_sz, &id_sedtemp);
         def_var_d(ncid, "sed_heatflux",   1, &dim_zones, &id_sedhf);
+        /* zone overlying-water temperature: the top boundary used by SoilTemp.
+         * Zone-averaging recomputes it each step but only AFTER sediment heating,
+         * so each step's flux uses the previous step's ztemp. It must be persisted
+         * or the first step after a restart uses a stale (zero) value. */
+        def_var_d(ncid, "zone_ztemp",     1, &dim_zones, &id_zztemp);
     }
 
     /* PTM particle state [ptm_stat_vars, ptm_particles] and
@@ -465,15 +470,18 @@ void write_glm_restart(const char *fn)
     if (n_sed_layers_rst > 0) {
         AED_REAL *stbuf = malloc(n_zones * n_sed_layers_rst * sizeof(AED_REAL));
         AED_REAL *hfbuf = malloc(n_zones * sizeof(AED_REAL));
-        if (!stbuf || !hfbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
+        AED_REAL *ztbuf = malloc(n_zones * sizeof(AED_REAL));
+        if (!stbuf || !hfbuf || !ztbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
         for (int z = 0; z < n_zones; z++) {
             hfbuf[z] = theZones[z].heatflux;
+            ztbuf[z] = theZones[z].ztemp;
             for (int k = 0; k < n_sed_layers_rst; k++)
                 stbuf[z * n_sed_layers_rst + k] = theZones[z].layers[k].temp;
         }
         RST_CHECK(nc_put_var_double(ncid, id_sedtemp, stbuf));
         RST_CHECK(nc_put_var_double(ncid, id_sedhf,   hfbuf));
-        free(stbuf); free(hfbuf);
+        RST_CHECK(nc_put_var_double(ncid, id_zztemp,  ztbuf));
+        free(stbuf); free(hfbuf); free(ztbuf);
     }
 
     /* PTM particle state
@@ -739,20 +747,28 @@ int read_glm_restart(const char *fn)
         int nsrl = att_n_sed_layers_rst;
         AED_REAL *stbuf = malloc(n_zones * nsrl * sizeof(AED_REAL));
         AED_REAL *hfbuf = malloc(n_zones * sizeof(AED_REAL));
-        if (!stbuf || !hfbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
+        AED_REAL *ztbuf = malloc(n_zones * sizeof(AED_REAL));
+        if (!stbuf || !hfbuf || !ztbuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
         int _id;
         RST_CHECK(nc_inq_varid(ncid, "sed_layer_temp", &_id));
         RST_CHECK(nc_get_var_double(ncid, _id, stbuf));
         RST_CHECK(nc_inq_varid(ncid, "sed_heatflux", &_id));
         RST_CHECK(nc_get_var_double(ncid, _id, hfbuf));
+        /* zone_ztemp may be absent in older restart files; restore it when present.
+         * Without it the first step after restart uses a stale (zero) ztemp as the
+         * SoilTemp top boundary, which breaks restart consistency for model 2. */
+        int have_zztemp = (nc_inq_varid(ncid, "zone_ztemp", &_id) == NC_NOERR);
+        if (have_zztemp)
+            RST_CHECK(nc_get_var_double(ncid, _id, ztbuf));
         for (int z = 0; z < n_zones; z++) {
             theZones[z].heatflux = hfbuf[z];
+            if (have_zztemp) theZones[z].ztemp = ztbuf[z];
             int kmax = (nsrl < theZones[z].n_sed_layers) ?
                         nsrl : theZones[z].n_sed_layers;
             for (int k = 0; k < kmax; k++)
                 theZones[z].layers[k].temp = stbuf[z * nsrl + k];
         }
-        free(stbuf); free(hfbuf);
+        free(stbuf); free(hfbuf); free(ztbuf);
     }
 
     /* ---- PTM particle state ---- */

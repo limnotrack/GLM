@@ -559,6 +559,10 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     extern AED_REAL *sed_roughness;
 //  extern AED_REAL *sed_temp_amplitude;
 //  extern AED_REAL *sed_temp_peak_doy;
+    extern int       n_sed_layers;
+    extern AED_REAL *sed_layer_depth;
+    extern AED_REAL *sed_vwc;
+    extern AED_REAL  sed_spinup_days;
     //==========================================================================
     NAMELIST sediment[] = {
           { "sediment",          TYPE_START,            NULL                  },
@@ -573,6 +577,10 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "sed_heat_Ksoil",    TYPE_DOUBLE,           &sed_heat_Ksoil       },
           { "sed_temp_depth",    TYPE_DOUBLE,           &sed_temp_depth       },
           { "sed_heat_model",    TYPE_INT,              &sed_heat_model       },
+          { "n_sed_layers",      TYPE_INT,              &n_sed_layers         },
+          { "sed_layer_depth",   TYPE_DOUBLE|MASK_LIST, &sed_layer_depth      },
+          { "sed_vwc",           TYPE_DOUBLE|MASK_LIST, &sed_vwc              },
+          { "sed_spinup_days",   TYPE_DOUBLE,           &sed_spinup_days      },
           { NULL,                TYPE_END,              NULL                  }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
@@ -1032,6 +1040,67 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
         fprintf(stderr, "     NOTE: benthic_mode > 1 but no zones defined; reverting to benthic_mode 1\n");
         benthic_mode = 1;
     }
+
+#ifdef AED
+    /**************************************************************************
+     * sed_heat_model == 2 : dynamic soil/sediment temperature model.        *
+     * A single soil-column profile (depths + water content) is shared       *
+     * across all zones; allocate it on each zone and seed the temperature    *
+     * profile with a spin-up. n_sed_layers is the TOTAL number of nodes N    *
+     * (including the surface-interface and deep-boundary nodes); the solver  *
+     * integrates the N-2 interior nodes (see zZSoilTemp).                    *
+     **************************************************************************/
+    if ( sed_heat_model == 2 ) {
+        if ( n_zones <= 0 || theZones == NULL ) {
+            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires sediment zones (benthic_mode = 2)\n");
+            exit(1);
+        }
+        if ( n_sed_layers < 3 || sed_layer_depth == NULL ) {
+            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires n_sed_layers >= 3 and a sed_layer_depth list\n");
+            exit(1);
+        }
+        if ( get_nml_listlen(namlst, "sediment", "sed_layer_depth") < n_sed_layers ) {
+            fprintf(stderr, "     ERROR: sed_layer_depth list shorter than n_sed_layers (%d)\n", n_sed_layers);
+            exit(1);
+        }
+        int vwc_len = (sed_vwc != NULL) ? get_nml_listlen(namlst, "sediment", "sed_vwc") : 0;
+        if ( sed_vwc != NULL && vwc_len != 1 && vwc_len < n_sed_layers ) {
+            fprintf(stderr, "     ERROR: sed_vwc must have 1 or n_sed_layers (%d) entries\n", n_sed_layers);
+            exit(1);
+        }
+
+        for (i = 0; i < n_zones; i++) {
+            theZones[i].n_sed_layers = n_sed_layers;
+            theZones[i].layers = calloc(n_sed_layers, sizeof(SedLayerType));
+            for (k = 0; k < n_sed_layers; k++) {
+                theZones[i].layers[k].depth = sed_layer_depth[k];
+                theZones[i].layers[k].vwc =
+                    (sed_vwc == NULL) ? 0.4 : (vwc_len == 1 ? sed_vwc[0] : sed_vwc[k]);
+            }
+#if !USE_DL_LOADER
+            /* Spin up the profile toward quasi-equilibrium before the run.
+             * NOTE: InitialTemp (libaed-water, upstream) hard-codes its surface
+             * boundary to ~5 degC during the spin-up iterations and ignores the
+             * passed topTemp -- an upstream quirk, not a bug introduced here. */
+            {
+                int      m       = n_sed_layers - 2;
+                AED_REAL wv      = (sed_vwc == NULL) ? 0.4 : sed_vwc[0];
+                AED_REAL botTemp = (sed_temp_mean != NULL) ? sed_temp_mean[i] : 10.0;
+                AED_REAL topTemp = botTemp;
+                AED_REAL *tNew   = calloc(n_sed_layers, sizeof(AED_REAL));
+                InitialTemp(&m, sed_layer_depth, &wv, &topTemp, &botTemp,
+                            &sed_spinup_days, tNew);
+                for (k = 0; k < n_sed_layers; k++)
+                    theZones[i].layers[k].temp = tNew[k];
+                free(tNew);
+            }
+#endif
+        }
+        if (quiet < 2)
+            fprintf(stderr, "     sed_heat_model = 2: %d sediment layers initialised across %d zones\n",
+                    n_sed_layers, n_zones);
+    }
+#endif
 
 /*
 fprintf(stderr, "n_zones %d\n", n_zones);
