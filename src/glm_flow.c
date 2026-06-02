@@ -427,6 +427,49 @@ void do_single_outflow(AED_REAL HeightOfOutflow, AED_REAL flow, OutflowDataType 
 
 
 /******************************************************************************
+ * Withdraw a volume of water at a given height using GLM's selective-         *
+ * withdrawal physics, for the oxygenation recirculation (Approach 3).         *
+ * Samples the withdrawal-layer T/S/WQ into the output args and returns the     *
+ * actual volume removed (which the caller re-injects elsewhere with added O2).*
+ ******************************************************************************/
+AED_REAL oxy_recirc_extract(AED_REAL height, AED_REAL want_vol,
+                            AED_REAL *temp, AED_REAL *salt, AED_REAL *wq)
+{
+    int lvl, wqidx;
+    AED_REAL vol_before, drawn;
+    OutflowDataType tmp;
+
+    if (want_vol <= zero) return zero;
+
+    //# Find the layer at the withdrawal height and sample its properties as
+    //# representative of the withdrawn water (same approximation the heat pump uses).
+    for (lvl = botmLayer; lvl <= surfLayer; lvl++)
+        if (Lake[lvl].Height >= height) break;
+    if (lvl > surfLayer) lvl = surfLayer;
+
+    if (temp != NULL) *temp = Lake[lvl].Temp;
+    if (salt != NULL) *salt = Lake[lvl].Salinity;
+    if (wq != NULL)
+        for (wqidx = 0; wqidx < Num_WQ_Vars; wqidx++)
+            wq[wqidx] = _WQ_Vars(wqidx, lvl);
+
+    //# Run GLM's selective-withdrawal physics with a temporary fixed outlet;
+    //# it recomputes Vol1 and resizes layers internally.
+    memset(&tmp, 0, sizeof(tmp));
+    tmp.Type = 1;
+    tmp.FloatOff = FALSE;
+    tmp.WQ_Outflow = NULL;
+
+    vol_before = Lake[surfLayer].Vol1;
+    do_single_outflow(height, want_vol, &tmp);
+    drawn = vol_before - Lake[surfLayer].Vol1;
+    if (drawn < zero) drawn = zero;
+    return drawn;
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
  * Loop through all outflows and process - return the difference between      *
  *  total volume before and after.                                            *
  ******************************************************************************/

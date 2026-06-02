@@ -254,6 +254,23 @@ AED_REAL heat_pump_dynamic_heat_flux = 0.0; //# Dynamic heat flux from CSV [W]
 AED_REAL heat_pump_current_heat_flux = 0.0; //# Current dynamic heat flux from CSV [W]
 
 //------------------------------------------------------------------------------
+// OXYGENATION SYSTEM (artificial aeration / oxygenator)
+int      oxygenation_mode = 0;              //# 0=off, 1=direct(constant), 2=direct(CSV), 3=recirculation
+int      oxy_num = 0;                        //# Number of direct-addition devices
+char    *oxy_name = NULL;                    //# AED dissolved-oxygen variable name
+AED_REAL oxy_max = 0.0;                       //# Optional O2 concentration cap (<=0 disables)
+int      oxy_o2_idx = -1;                    //# Resolved WQ index of the O2 variable
+int      oxy_input_type[MaxInf];                    //# Per device: 1=mass rate, 2=flow*conc
+AED_REAL oxy_height[MaxInf];                  //# Per device: height above bottom (m)
+AED_REAL oxy_load[MaxInf];                    //# Per device: mode 1 mass/day
+AED_REAL oxy_flow[MaxInf];                    //# Per device: mode 2 flow (m3/day)
+AED_REAL oxy_conc[MaxInf];                    //# Per device: mode 2 O2 concentration
+AED_REAL oxy_recirc_withdraw_height = 0.0;   //# Height above bottom to withdraw from (m)
+AED_REAL oxy_recirc_return_height = 0.0;     //# Height above bottom to return to (m)
+AED_REAL oxy_recirc_flow = 0.0;              //# Recirculation rate (m3/s)
+AED_REAL oxy_recirc_add = 0.0;                //# O2 mass loading rate (mass/day)
+
+//------------------------------------------------------------------------------
 // LITTORAL
 CLOGICAL littoral_sw        = FALSE;
 

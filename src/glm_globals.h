@@ -375,6 +375,24 @@ extern AED_REAL heat_pump_dynamic_heat_flux; //# dynamic heat flux from CSV (W)
 extern AED_REAL heat_pump_current_heat_flux; //# current dynamic heat flux from CSV (W)
 
 /*----------------------------------------------------------------------------*/
+// OXYGENATION SYSTEM (artificial aeration / oxygenator)
+extern int      oxygenation_mode;         //# 0=off, 1=direct(constant), 2=direct(CSV), 3=recirculation
+extern int      oxy_num;                  //# number of direct-addition devices (modes 1 & 2)
+extern char    *oxy_name;                 //# AED dissolved-oxygen variable name (default 'OXY_oxy')
+extern AED_REAL oxy_max;                  //# optional O2 concentration cap (<=0 disables)
+extern int      oxy_o2_idx;               //# resolved WQ index of the O2 variable (set at init)
+extern int      oxy_input_type[];               //# per device: 1=mass rate, 2=flow*conc
+extern AED_REAL oxy_height[];             //# per device: height above bottom for addition (m)
+extern AED_REAL oxy_load[];               //# per device: mode 1 O2 mass loading rate (mass/day)
+extern AED_REAL oxy_flow[];               //# per device: mode 2 nominal flow (m3/day)
+extern AED_REAL oxy_conc[];               //# per device: mode 2 O2 concentration
+//# Approach 3 (withdraw + re-inject with added O2) - self-contained (oxygenation_mode==3)
+extern AED_REAL oxy_recirc_withdraw_height; //# height above bottom to withdraw from (m)
+extern AED_REAL oxy_recirc_return_height;   //# height above bottom to return to (m)
+extern AED_REAL oxy_recirc_flow;            //# recirculation rate (m3/s, or from CSV)
+extern AED_REAL oxy_recirc_add;             //# O2 mass loading rate (mass/day, or from CSV)
+
+/*----------------------------------------------------------------------------*/
 // DEBUGGING
 extern CLOGICAL dbg_mix;   //# debug output from mixer
 extern CLOGICAL no_evap;   //# turn off evaporation

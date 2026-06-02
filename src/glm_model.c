@@ -63,6 +63,7 @@
 #include "glm_stress.h"
 #include "glm_balance.h"
 #include "glm_heatexchange.h"
+#include "glm_oxygenation.h"
 #include "glm_restart.h"
 #ifdef PLOTS
 #include <libplot.h>
@@ -381,6 +382,8 @@ void do_model(int jstart, int nsave)
 
         //# Read & set today's outflow properties
         read_daily_outflow(jday, NumOut, DrawNew, ElevOut, HeatFluxOut, NULL);
+        //# Read today's oxygenation values (CSV-driven devices and recirc stream)
+        read_daily_oxygenation(jday);
         //# To get daily outflow (i.e. m3/day) times by the seconds in the current day
         for (i = 0; i < NumOut; i++)
             Outflows[i].Draw = (DrawOld[i] + DrawNew[i]) / 2.0 * day_fraction * iSecsPerDay ;
@@ -444,6 +447,10 @@ void do_model(int jstart, int nsave)
 
         //# Extract withdrawal from all offtakes
         SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+
+        //# Oxygenation: re-inject recirculated water (A3) and add direct O2 (A1/A2)
+        oxy_do_recirculation(day_fraction);
+        do_oxygenation(day_fraction);
 
         //# Take care of any overflow
         SurfData.dailyOverflow = do_overflow(jday, day_fraction);
@@ -611,6 +618,8 @@ void do_model_non_avg(int jstart, int nsave)
 
         //# Read & set today's outflow properties
         read_daily_outflow(jday, NumOut, DrawNew, ElevOut, HeatFluxOut, NULL); // No WQ for outflows yet
+        //# Read today's oxygenation values (CSV-driven devices and recirc stream)
+        read_daily_oxygenation(jday);
         //# To get daily outflow (i.e. m3/day) times by the seconds in the current day
         //# (stoptime - startTOD) allow for partial dates at the the beginning and end of
         //# simulation
@@ -666,6 +675,10 @@ void do_model_non_avg(int jstart, int nsave)
         if (Lake[surfLayer].Vol1 > zero) {
            //# Extract withdrawal from all offtakes
            SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+
+           //# Oxygenation: re-inject recirculated water (A3) and add direct O2 (A1/A2)
+           oxy_do_recirculation(day_fraction);
+           do_oxygenation(day_fraction);
 
            //# Take care of any overflow
            SurfData.dailyOverflow = do_overflow(jday, day_fraction);
@@ -815,9 +828,16 @@ void do_model_coupled(int step_start, int step_end,
          //# Insert inflows for all streams
         SurfData.dailyInflow = do_inflows();
 
+        //# Read today's oxygenation values (CSV-driven devices and recirc stream)
+        read_daily_oxygenation(jday);
+
         if (Lake[surfLayer].Vol1 > zero) {
            //# Extract withdrawal from all offtakes
            SurfData.dailyOutflow = do_outflows(jday, day_fraction);
+
+           //# Oxygenation: re-inject recirculated water (A3) and add direct O2 (A1/A2)
+           oxy_do_recirculation(day_fraction);
+           do_oxygenation(day_fraction);
 
            //# Take care of any overflow
            SurfData.dailyOverflow = do_overflow(jday, day_fraction);
