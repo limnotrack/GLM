@@ -50,6 +50,7 @@
 #include "glm_balance.h"
 #include "glm_restart.h"
 #include "glm_heatexchange.h"
+#include "glm_oxygenation.h"
 
 #include <aed_time.h>
 #include <namelist.h>
@@ -659,6 +660,37 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "heat_pump_temp_change",  TYPE_DOUBLE,           &heat_pump_temp_change  },
           { "heat_pump_heat_flux",    TYPE_DOUBLE,           &heat_pump_heat_flux    },
           { NULL,                     TYPE_END,              NULL                    }
+    };
+    /*-- %%END NAMELIST ------------------------------------------------------*/
+
+    /*-- %%NAMELIST oxygenation ----------------------------------------------*/
+    int             oxy_num_l       = 0;
+    int            *oxy_input_type_l      = NULL;
+    AED_REAL       *oxy_height_l    = NULL;
+    AED_REAL       *oxy_load_l      = NULL;
+    AED_REAL       *oxy_flow_l      = NULL;
+    AED_REAL       *oxy_conc_l      = NULL;
+    char          **oxy_fl          = NULL;
+    char           *timefmt_oxy     = NULL;
+    //==========================================================================
+    NAMELIST oxygenation[] = {
+          { "oxygenation",                TYPE_START,        NULL                       },
+          { "oxygenation_mode",           TYPE_INT,          &oxygenation_mode          },
+          { "num_oxy",                    TYPE_INT,          &oxy_num_l                 },
+          { "oxy_name",                   TYPE_STR,          &oxy_name                  },
+          { "oxy_max",                    TYPE_DOUBLE,       &oxy_max                   },
+          { "oxy_input_type",                   TYPE_INT|MASK_LIST,    &oxy_input_type_l            },
+          { "oxy_height",                 TYPE_DOUBLE|MASK_LIST, &oxy_height_l          },
+          { "oxy_load",                   TYPE_DOUBLE|MASK_LIST, &oxy_load_l            },
+          { "oxy_flow",                   TYPE_DOUBLE|MASK_LIST, &oxy_flow_l            },
+          { "oxy_conc",                   TYPE_DOUBLE|MASK_LIST, &oxy_conc_l            },
+          { "oxy_fl",                     TYPE_STR|MASK_LIST,    &oxy_fl                },
+          { "oxy_recirc_withdraw_height", TYPE_DOUBLE,       &oxy_recirc_withdraw_height },
+          { "oxy_recirc_return_height",   TYPE_DOUBLE,       &oxy_recirc_return_height   },
+          { "oxy_recirc_flow",            TYPE_DOUBLE,       &oxy_recirc_flow            },
+          { "oxy_recirc_add",             TYPE_DOUBLE,       &oxy_recirc_add             },
+          { "time_fmt",                   TYPE_STR,          &timefmt_oxy               },
+          { NULL,                         TYPE_END,          NULL                       }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
 
@@ -1447,6 +1479,38 @@ for (i = 0; i < n_zones; i++) {
     // Read heat pump configuration
     get_namelist(namlst, heat_pump);
 
+    // Read oxygenation configuration (optional block)
+    if ( get_namelist(namlst, oxygenation) ) {
+        //# Block absent or failed to parse: leave oxygenation disabled.
+        oxygenation_mode = 0;
+    } else {
+        //# The parser returns oxy_name as a pointer into a line buffer that is
+        //# clobbered by the next get_namelist (debugging); copy it to stable storage.
+        if ( oxy_name != NULL ) oxy_name = strdup(oxy_name);
+        oxy_num = oxy_num_l;
+        if ( oxy_num > MaxInf ) {
+            fprintf(stderr, "     ERROR: too many oxygenation devices %d > %d\n", oxy_num, MaxInf);
+            exit(1);
+        }
+        for (i = 0; i < oxy_num; i++) {
+            oxy_input_type[i]   = (oxy_input_type_l   != NULL) ? oxy_input_type_l[i]   : 1;
+            oxy_height[i] = (oxy_height_l != NULL) ? oxy_height_l[i] : 0.0;
+            oxy_load[i]   = (oxy_load_l   != NULL) ? oxy_load_l[i]   : 0.0;
+            oxy_flow[i]   = (oxy_flow_l   != NULL) ? oxy_flow_l[i]   : 0.0;
+            oxy_conc[i]   = (oxy_conc_l   != NULL) ? oxy_conc_l[i]   : 0.0;
+        }
+        //# A single 'oxy_fl' filename configuration is shared by all modes:
+        //#   mode 2 -> per-device load CSV(s);  mode 3 -> recirculation CSV.
+        if ( oxygenation_mode == 2 ) {
+            for (i = 0; i < oxy_num; i++)
+                if ( oxy_fl != NULL && oxy_fl[i] != NULL )
+                    oxy_open_file(i, oxy_fl[i], timefmt_oxy);
+        } else if ( oxygenation_mode == 3 ) {
+            if ( oxy_fl != NULL && oxy_fl[0] != NULL )
+                oxy_open_recirc_file(oxy_fl[0], timefmt_oxy);
+        }
+    }
+
     get_namelist(namlst, debugging);
 
     close_namelist(namlst);  // Close the glm.nml file
@@ -1454,6 +1518,10 @@ for (i = 0; i < n_zones; i++) {
     // Initialize heat pump system
     init_heat_pump();
     check_heat_pump_config();
+
+    // Initialize oxygenation system
+    init_oxygenation();
+    check_oxygenation_config();
 
 #if DEBUG
     debug_initialisation(0);
