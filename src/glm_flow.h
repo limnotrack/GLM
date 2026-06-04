@@ -36,4 +36,10 @@ AED_REAL do_outflows(int jday, AED_REAL day_fraction);
 AED_REAL do_overflow(int jday, AED_REAL day_fraction);
 AED_REAL do_inflows(void);
 
+//# Withdraw a volume at a given height (selective-withdrawal physics), used by
+//# the oxygenation recirculation. Samples withdrawal-layer T/S/WQ into the
+//# output args and returns the volume actually removed.
+AED_REAL oxy_recirc_extract(AED_REAL height, AED_REAL want_vol,
+                            AED_REAL *temp, AED_REAL *salt, AED_REAL *wq);
+
 #endif

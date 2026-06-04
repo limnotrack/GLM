@@ -50,6 +50,7 @@
 #include "glm_balance.h"
 #include "glm_restart.h"
 #include "glm_heatexchange.h"
+#include "glm_oxygenation.h"
 
 #include <aed_time.h>
 #include <namelist.h>
@@ -559,6 +560,10 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     extern AED_REAL *sed_roughness;
 //  extern AED_REAL *sed_temp_amplitude;
 //  extern AED_REAL *sed_temp_peak_doy;
+    extern int       n_sed_layers;
+    extern AED_REAL *sed_layer_depth;
+    extern AED_REAL *sed_vwc;
+    extern AED_REAL  sed_spinup_days;
     //==========================================================================
     NAMELIST sediment[] = {
           { "sediment",          TYPE_START,            NULL                  },
@@ -573,6 +578,10 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "sed_heat_Ksoil",    TYPE_DOUBLE,           &sed_heat_Ksoil       },
           { "sed_temp_depth",    TYPE_DOUBLE,           &sed_temp_depth       },
           { "sed_heat_model",    TYPE_INT,              &sed_heat_model       },
+          { "n_sed_layers",      TYPE_INT,              &n_sed_layers         },
+          { "sed_layer_depth",   TYPE_DOUBLE|MASK_LIST, &sed_layer_depth      },
+          { "sed_vwc",           TYPE_DOUBLE|MASK_LIST, &sed_vwc              },
+          { "sed_spinup_days",   TYPE_DOUBLE,           &sed_spinup_days      },
           { NULL,                TYPE_END,              NULL                  }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
@@ -651,6 +660,37 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "heat_pump_temp_change",  TYPE_DOUBLE,           &heat_pump_temp_change  },
           { "heat_pump_heat_flux",    TYPE_DOUBLE,           &heat_pump_heat_flux    },
           { NULL,                     TYPE_END,              NULL                    }
+    };
+    /*-- %%END NAMELIST ------------------------------------------------------*/
+
+    /*-- %%NAMELIST oxygenation ----------------------------------------------*/
+    int             oxy_num_l       = 0;
+    int            *oxy_input_type_l      = NULL;
+    AED_REAL       *oxy_height_l    = NULL;
+    AED_REAL       *oxy_load_l      = NULL;
+    AED_REAL       *oxy_flow_l      = NULL;
+    AED_REAL       *oxy_conc_l      = NULL;
+    char          **oxy_fl          = NULL;
+    char           *timefmt_oxy     = NULL;
+    //==========================================================================
+    NAMELIST oxygenation[] = {
+          { "oxygenation",                TYPE_START,        NULL                       },
+          { "oxygenation_mode",           TYPE_INT,          &oxygenation_mode          },
+          { "num_oxy",                    TYPE_INT,          &oxy_num_l                 },
+          { "oxy_name",                   TYPE_STR,          &oxy_name                  },
+          { "oxy_max",                    TYPE_DOUBLE,       &oxy_max                   },
+          { "oxy_input_type",                   TYPE_INT|MASK_LIST,    &oxy_input_type_l            },
+          { "oxy_height",                 TYPE_DOUBLE|MASK_LIST, &oxy_height_l          },
+          { "oxy_load",                   TYPE_DOUBLE|MASK_LIST, &oxy_load_l            },
+          { "oxy_flow",                   TYPE_DOUBLE|MASK_LIST, &oxy_flow_l            },
+          { "oxy_conc",                   TYPE_DOUBLE|MASK_LIST, &oxy_conc_l            },
+          { "oxy_fl",                     TYPE_STR|MASK_LIST,    &oxy_fl                },
+          { "oxy_recirc_withdraw_height", TYPE_DOUBLE,       &oxy_recirc_withdraw_height },
+          { "oxy_recirc_return_height",   TYPE_DOUBLE,       &oxy_recirc_return_height   },
+          { "oxy_recirc_flow",            TYPE_DOUBLE,       &oxy_recirc_flow            },
+          { "oxy_recirc_add",             TYPE_DOUBLE,       &oxy_recirc_add             },
+          { "time_fmt",                   TYPE_STR,          &timefmt_oxy               },
+          { NULL,                         TYPE_END,          NULL                       }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
 
@@ -1033,6 +1073,67 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
         benthic_mode = 1;
     }
 
+#ifdef AED
+    /**************************************************************************
+     * sed_heat_model == 2 : dynamic soil/sediment temperature model.        *
+     * A single soil-column profile (depths + water content) is shared       *
+     * across all zones; allocate it on each zone and seed the temperature    *
+     * profile with a spin-up. n_sed_layers is the TOTAL number of nodes N    *
+     * (including the surface-interface and deep-boundary nodes); the solver  *
+     * integrates the N-2 interior nodes (see zZSoilTemp).                    *
+     **************************************************************************/
+    if ( sed_heat_model == 2 ) {
+        if ( n_zones <= 0 || theZones == NULL ) {
+            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires sediment zones (benthic_mode = 2)\n");
+            exit(1);
+        }
+        if ( n_sed_layers < 3 || sed_layer_depth == NULL ) {
+            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires n_sed_layers >= 3 and a sed_layer_depth list\n");
+            exit(1);
+        }
+        if ( get_nml_listlen(namlst, "sediment", "sed_layer_depth") < n_sed_layers ) {
+            fprintf(stderr, "     ERROR: sed_layer_depth list shorter than n_sed_layers (%d)\n", n_sed_layers);
+            exit(1);
+        }
+        int vwc_len = (sed_vwc != NULL) ? get_nml_listlen(namlst, "sediment", "sed_vwc") : 0;
+        if ( sed_vwc != NULL && vwc_len != 1 && vwc_len < n_sed_layers ) {
+            fprintf(stderr, "     ERROR: sed_vwc must have 1 or n_sed_layers (%d) entries\n", n_sed_layers);
+            exit(1);
+        }
+
+        for (i = 0; i < n_zones; i++) {
+            theZones[i].n_sed_layers = n_sed_layers;
+            theZones[i].layers = calloc(n_sed_layers, sizeof(SedLayerType));
+            for (k = 0; k < n_sed_layers; k++) {
+                theZones[i].layers[k].depth = sed_layer_depth[k];
+                theZones[i].layers[k].vwc =
+                    (sed_vwc == NULL) ? 0.4 : (vwc_len == 1 ? sed_vwc[0] : sed_vwc[k]);
+            }
+#if !USE_DL_LOADER
+            /* Spin up the profile toward quasi-equilibrium before the run.
+             * NOTE: InitialTemp (libaed-water, upstream) hard-codes its surface
+             * boundary to ~5 degC during the spin-up iterations and ignores the
+             * passed topTemp -- an upstream quirk, not a bug introduced here. */
+            {
+                int      m       = n_sed_layers - 2;
+                AED_REAL wv      = (sed_vwc == NULL) ? 0.4 : sed_vwc[0];
+                AED_REAL botTemp = (sed_temp_mean != NULL) ? sed_temp_mean[i] : 10.0;
+                AED_REAL topTemp = botTemp;
+                AED_REAL *tNew   = calloc(n_sed_layers, sizeof(AED_REAL));
+                InitialTemp(&m, sed_layer_depth, &wv, &topTemp, &botTemp,
+                            &sed_spinup_days, tNew);
+                for (k = 0; k < n_sed_layers; k++)
+                    theZones[i].layers[k].temp = tNew[k];
+                free(tNew);
+            }
+#endif
+        }
+        if (quiet < 2)
+            fprintf(stderr, "     sed_heat_model = 2: %d sediment layers initialised across %d zones\n",
+                    n_sed_layers, n_zones);
+    }
+#endif
+
 /*
 fprintf(stderr, "n_zones %d\n", n_zones);
 for (i = 0; i < n_zones; i++) {
@@ -1378,6 +1479,38 @@ for (i = 0; i < n_zones; i++) {
     // Read heat pump configuration
     get_namelist(namlst, heat_pump);
 
+    // Read oxygenation configuration (optional block)
+    if ( get_namelist(namlst, oxygenation) ) {
+        //# Block absent or failed to parse: leave oxygenation disabled.
+        oxygenation_mode = 0;
+    } else {
+        //# The parser returns oxy_name as a pointer into a line buffer that is
+        //# clobbered by the next get_namelist (debugging); copy it to stable storage.
+        if ( oxy_name != NULL ) oxy_name = strdup(oxy_name);
+        oxy_num = oxy_num_l;
+        if ( oxy_num > MaxInf ) {
+            fprintf(stderr, "     ERROR: too many oxygenation devices %d > %d\n", oxy_num, MaxInf);
+            exit(1);
+        }
+        for (i = 0; i < oxy_num; i++) {
+            oxy_input_type[i]   = (oxy_input_type_l   != NULL) ? oxy_input_type_l[i]   : 1;
+            oxy_height[i] = (oxy_height_l != NULL) ? oxy_height_l[i] : 0.0;
+            oxy_load[i]   = (oxy_load_l   != NULL) ? oxy_load_l[i]   : 0.0;
+            oxy_flow[i]   = (oxy_flow_l   != NULL) ? oxy_flow_l[i]   : 0.0;
+            oxy_conc[i]   = (oxy_conc_l   != NULL) ? oxy_conc_l[i]   : 0.0;
+        }
+        //# A single 'oxy_fl' filename configuration is shared by all modes:
+        //#   mode 2 -> per-device load CSV(s);  mode 3 -> recirculation CSV.
+        if ( oxygenation_mode == 2 ) {
+            for (i = 0; i < oxy_num; i++)
+                if ( oxy_fl != NULL && oxy_fl[i] != NULL )
+                    oxy_open_file(i, oxy_fl[i], timefmt_oxy);
+        } else if ( oxygenation_mode == 3 ) {
+            if ( oxy_fl != NULL && oxy_fl[0] != NULL )
+                oxy_open_recirc_file(oxy_fl[0], timefmt_oxy);
+        }
+    }
+
     get_namelist(namlst, debugging);
 
     close_namelist(namlst);  // Close the glm.nml file
@@ -1385,6 +1518,10 @@ for (i = 0; i < n_zones; i++) {
     // Initialize heat pump system
     init_heat_pump();
     check_heat_pump_config();
+
+    // Initialize oxygenation system
+    init_oxygenation();
+    check_oxygenation_config();
 
 #if DEBUG
     debug_initialisation(0);

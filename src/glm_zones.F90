@@ -434,15 +434,37 @@ SUBROUTINE ZSoilTemp(izone) BIND(C, name="zZSoilTemp")
 !-------------------------------------------------------------------------------
    USE aed_util, ONLY : SoilTemp
 !ARGUMENTS
-   TYPE(C_PTR),INTENT(inout) :: izone
+   !# izone is a C pointer passed BY VALUE from glm_surface.c (ZSoilTemp(&theZones[z]));
+   !# it MUST carry the VALUE attribute or Fortran treats it as pass-by-reference and
+   !# dereferences the struct's first word as the address.
+   TYPE(C_PTR),VALUE :: izone
 !LOCALS
    TYPE(ZoneType),POINTER :: zone
    TYPE(SedLayerType),DIMENSION(:),POINTER :: layers
+   INTEGER :: nsl, kk
+   AED_REAL :: hf
+   AED_REAL,DIMENSION(:),ALLOCATABLE :: sdepth, svwc, stemp
 !-------------------------------------------------------------------------------
 !BEGIN
    CALL C_F_POINTER(izone, zone);
-   CALL C_F_POINTER(zone%c_layers, layers, [zone%n_sed_layers]);
-   CALL SoilTemp(zone%n_sed_layers, layers%depth, layers%vwc, zone%ztemp, layers%temp, zone%heatflux)
+   nsl = zone%n_sed_layers
+   CALL C_F_POINTER(zone%c_layers, layers, [nsl]);
+   !# Marshal the (non-contiguous) derived-type component sections into contiguous
+   !# arrays before calling SoilTemp.
+   ALLOCATE(sdepth(nsl), svwc(nsl), stemp(nsl))
+   DO kk = 1, nsl
+      sdepth(kk) = layers(kk)%depth
+      svwc(kk)   = layers(kk)%vwc
+      stemp(kk)  = layers(kk)%temp
+   ENDDO
+   !# n_sed_layers is the total node count N; SoilTemp uses the 0:m+1 convention
+   !# (needs m+2 = N slots), so the interior node count passed is m = N-2.
+   CALL SoilTemp(nsl - 2, sdepth, svwc, zone%ztemp, stemp, hf)
+   zone%heatflux = hf
+   DO kk = 1, nsl
+      layers(kk)%temp = stemp(kk)
+   ENDDO
+   DEALLOCATE(sdepth, svwc, stemp)
 END SUBROUTINE ZSoilTemp
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
