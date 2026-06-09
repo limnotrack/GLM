@@ -1408,7 +1408,9 @@ for (i = 0; i < n_zones; i++) {
     }
     NumDif += Num_WQ_Vars;
 
+    fprintf(stderr, "     DBG calling initialise_lake\n");
     initialise_lake(namlst);
+    fprintf(stderr, "     DBG initialise_lake returned\n");
 
     //--------------------------------------------------------------------------
     if ( !get_namelist(namlst, mass_balance) ) {
@@ -1845,6 +1847,7 @@ void initialise_lake(int namlst)
     int *idx = NULL;
 
 /*----------------------------------------------------------------------------*/
+    fprintf(stderr, "     DBG entered initialise_lake\n");
     //-------------------------------------------------
     // Do the initial profiles
     //-------------------------------------------------
@@ -1858,12 +1861,25 @@ void initialise_lake(int namlst)
         exit(1);
     }
 
+    fprintf(stderr, "     DBG init_profiles: num_heights=%d num_depths=%d the_heights=%p the_depths=%p lake_depth=%f\n",
+            num_heights, num_depths, (void*)the_heights, (void*)the_depths, lake_depth);
+
     if (! wq_calc) num_wq_vars = 0;
 
     // Initial values for the number of levels specified in the glm.nml file
+    if ( the_heights != NULL && num_heights == 0 ) {
+        fprintf(stderr, "     ERROR: 'the_heights' was provided but 'num_heights' is missing or zero in init_profiles\n");
+        exit(1);
+    }
+    if ( the_depths != NULL && num_depths == 0 ) {
+        fprintf(stderr, "     ERROR: 'the_depths' was provided but 'num_depths' is missing or zero in init_profiles\n");
+        exit(1);
+    }
     if ( num_heights != 0 ) {
+        fprintf(stderr, "     DBG taking num_heights path: the_heights=%p\n", (void*)the_heights);
         NumLayers = num_heights;
         for (i = 0; i < num_heights; i++) {
+            fprintf(stderr, "     DBG Lake[%d].Height = the_heights[%d] (ptr=%p)\n", i, i, (void*)the_heights);
             Lake[i].Height = the_heights[i];
             Lake[i].Temp = the_temps[i];
             Lake[i].Salinity = the_sals[i];
