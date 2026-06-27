@@ -230,7 +230,6 @@ SUBROUTINE api_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
    CALL api_set_glm_env()
 
    n_aed_vars = aed_configure_models(fname, n_vars, n_vars_ben, n_vars_diag, n_vars_diag_sheet, n_ptm_vars)
-   print *, "DEBUG glm_api_aed: n_vars=", n_vars, " n_vars_ben=", n_vars_ben, " Tot=", n_vars+n_vars_ben
 
    NumWQ_Vars  = n_vars
    NumWQ_Ben   = n_vars_ben

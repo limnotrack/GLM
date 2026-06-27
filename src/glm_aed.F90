@@ -289,7 +289,6 @@ SUBROUTINE aed_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
 !  print *,"      ... nml file parsing completed."
 
    n_aed_vars = aed_core_status(n_vars, n_vars_ben, n_vars_diag, n_vars_diag_sheet)
-   print *, "DEBUG glm_aed: n_vars=", n_vars, " n_vars_ben=", n_vars_ben, " Tot=", n_vars+n_vars_ben
 
 #if DEBUG
    DO i=1,n_aed_vars
