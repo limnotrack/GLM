@@ -115,6 +115,10 @@ MODULE glm_types
       AED_REAL :: dailyRain        !# Daily Rain (m3/day)
       AED_REAL :: dailyRunoff      !# Daily Rain (m3/day)
       AED_REAL :: dailySnow        !# Daily Snow (m3/day)
+      AED_REAL :: Qsw              !# Shortwave radiation (W/m2)
+      AED_REAL :: Qe               !# Latent heat flux (W/m2)
+      AED_REAL :: Qh               !# Sensible heat flux (W/m2)
+      AED_REAL :: Qlw              !# Net longwave radiation (W/m2)
       AED_REAL :: dailyQsw         !# Daily Short Wave Radiation (J/day)
       AED_REAL :: dailyQe          !# Daily Latent Heat(J/day)
       AED_REAL :: dailyQh          !# Daily Sensible Heat (J/day)
@@ -125,6 +129,8 @@ MODULE glm_types
       AED_REAL :: dailySeepage     !# Total Daily Seepage (m3/day)
       AED_REAL :: albedo           !# Daily surface albedo
       AED_REAL :: dailyzonL        !# Average z/L value, daily atmospheric stability
+      AED_REAL :: u_star           !# Wind friction velocity (m/s)
+      AED_REAL :: Q_net            !# Net non-penetrative heat flux (W/m2)
    END TYPE SurfaceDataType
 
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

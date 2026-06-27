@@ -148,9 +148,10 @@ extern InflowDataType Inflows[];   //# Array of Inflows
 
 extern int NumOut;                 //# Number of outflows
 extern OutflowDataType Outflows[]; //# Array of Outflows
-extern int O2crit;
-extern int O2critdep;
-extern int O2critdays;
+extern AED_REAL crit_val;
+extern AED_REAL crit_dep;
+extern int crit_days;
+extern CLOGICAL CRITabove;
 extern CLOGICAL MIXwithdraw;
 extern CLOGICAL COUPLoxy;
 extern AED_REAL WithdrawalTemp;

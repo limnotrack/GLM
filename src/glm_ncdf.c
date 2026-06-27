@@ -66,6 +66,7 @@ static int SnowDns_id, Alb_id, MaxT_id, MinT_id, SfT_id, DQsw_id, DQe_id;
 static int DQh_id, DQlw_id, Light_id, BenLight_id, SWH_id, SWL_id, SWP_id;
 static int Qsw_id, Qe_id, Qh_id, Qlw_id;
 static int LkNum_id, maxdtz_id, CD_id, CHE_id, zL_id;
+static int zarea_id;
 
 #ifdef _WIN32
     char *strndup(const char *s, size_t len);
@@ -204,6 +205,12 @@ int init_glm_ncdf(const char *fn, const char *title, AED_REAL lat,
     check_nc_error(nc_def_var(ncid, "taub",    NC_REALTYPE, 4, dims, &Taub_id));
     check_nc_error(nc_def_var(ncid, "epsilon", NC_REALTYPE, 4, dims, &epsilon_id));
 
+    dims[3] = x_dim;
+    dims[2] = y_dim;
+    dims[1] = zone_dim;
+    dims[0] = time_dim;
+    check_nc_error(nc_def_var(ncid, "zarea", NC_REALTYPE, 4, dims, &zarea_id));
+
     /**************************************************************************
      * assign attributes                                                      *
      **************************************************************************/
@@ -283,6 +290,7 @@ int init_glm_ncdf(const char *fn, const char *title, AED_REAL lat,
 
     set_nc_attributes(ncid, Taub_id,    "N/m2",    "layer stress"     PARAM_FILLVALUE);
     set_nc_attributes(ncid, epsilon_id, "m2/s",    "diffusivity"      PARAM_FILLVALUE);
+    set_nc_attributes(ncid, zarea_id,   "m2",      "sediment zone area" PARAM_FILLVALUE);
 
     //# global attributes
     nc_put_att(ncid, NC_GLOBAL, "Title", NC_CHAR, strlen(title), title);
@@ -433,6 +441,13 @@ void write_glm_ncdf(int ncid, int wlev, int nlev, int stepnum, AED_REAL timestep
     free(temps);  free(dens); free(qsw);
     free(extc_coef); free(u_mean); free(u_orb);
     free(taub); free(epsilon);
+
+    if ( n_zones > 0 ) {
+        AED_REAL *zarea = malloc(n_zones * sizeof(AED_REAL));
+        for (i = 0; i < n_zones; i++) zarea[i] = theZones[i].zarea;
+        store_nc_array(ncid, zarea_id, XYNT_SHAPE, n_zones, n_zones, zarea);
+        free(zarea);
+    }
 
     check_nc_error(nc_sync(ncid));
 }

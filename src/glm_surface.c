@@ -948,6 +948,7 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
        SurfData.Qe = Q_latentheat;
        SurfData.Qh = Q_sensibleheat;
        SurfData.Qlw = Q_longwave;
+       SurfData.Q_net = Q_latentheat + Q_sensibleheat + Q_longwave;
     }
 
     /***************************************************************************

@@ -103,6 +103,8 @@ MODULE glm_api_aed
 !  AED_REAL,DIMENSION(:),  ALLOCATABLE,TARGET :: cc_hz !# water quality array - benthic: nvars
    AED_REAL,DIMENSION(:),  POINTER :: cc_hz !# water quality array - benthic: nvars
    AED_REAL,DIMENSION(:,:),ALLOCATABLE,TARGET :: cc_diag
+   AED_REAL,DIMENSION(:,:),ALLOCATABLE        :: cc_diag_old
+   AED_REAL,DIMENSION(:),  ALLOCATABLE        :: z_prev
    AED_REAL,DIMENSION(:),  ALLOCATABLE,TARGET :: cc_diag_hz
 
    LOGICAL,TARGET :: actv = .TRUE.
@@ -114,6 +116,7 @@ MODULE glm_api_aed
 
    !# Arrays for environmental variables not supplied externally.
    AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: depth
+   AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: layer_area  ! incremental area per layer (area(i)-area(i-1))
 
    AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: pres
    AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: par
@@ -147,6 +150,10 @@ MODULE glm_api_aed
    AED_REAL,POINTER :: longwave
    AED_REAL,POINTER :: wind
    AED_REAL,POINTER :: air_pres
+   AED_REAL,POINTER :: u_star_api
+   AED_REAL,POINTER :: Q_net_api
+   AED_REAL,POINTER :: delzBlueIce_api
+   AED_REAL,POINTER :: delzWhiteIce_api
 
    AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: feedback
 
@@ -223,6 +230,7 @@ SUBROUTINE api_init_glm(i_fname, len, NumWQ_Vars, NumWQ_Ben)                   &
    CALL api_set_glm_env()
 
    n_aed_vars = aed_configure_models(fname, n_vars, n_vars_ben, n_vars_diag, n_vars_diag_sheet, n_ptm_vars)
+   print *, "DEBUG glm_api_aed: n_vars=", n_vars, " n_vars_ben=", n_vars_ben, " Tot=", n_vars+n_vars_ben
 
    NumWQ_Vars  = n_vars
    NumWQ_Ben   = n_vars_ben
@@ -260,9 +268,13 @@ SUBROUTINE api_set_glm_env()
    humidity => MetData%RelHum
    wind     => MetData%WindSpeed
    rain     => MetData%Rain
-   evap     => SurfData%Evap
-   I_0      => MetData%ShortWave
-   longwave => MetData%LongWave
+   evap             => SurfData%Evap
+   I_0              => MetData%ShortWave
+   longwave         => MetData%LongWave
+   u_star_api       => SurfData%u_star
+   Q_net_api        => SurfData%Q_net
+   delzBlueIce_api  => SurfData%delzBlueIce
+   delzWhiteIce_api => SurfData%delzWhiteIce
 
    !# Set pointers to GLMs dynamic variables that will be updated later (in do_glm_wq)
    lheights => theLake%Height
@@ -282,6 +294,10 @@ SUBROUTINE api_set_glm_env()
    ALLOCATE(depth(MaxLayers),stat=status)
    IF (status /= 0) STOP 'allocate_memory(): Error allocating (depth)'
    depth = one_
+
+   ALLOCATE(layer_area(MaxLayers),stat=status)
+   IF (status /= 0) STOP 'allocate_memory(): Error allocating (layer_area)'
+   layer_area = zero_
 
    ALLOCATE(dz(MaxLayers),stat=status)
    IF (status /= 0) STOP 'allocate_memory(): Error allocating (dz)'
@@ -349,7 +365,7 @@ SUBROUTINE api_set_glm_env()
    env(1)%col_area      => col_area
    env(1)%height        => lheights
    env(1)%depth         => depth
-   env(1)%area          => area
+   env(1)%area          => layer_area   ! incremental area; cumulative theLake%LayerArea still available via 'area'
    env(1)%dz            => dz
 
    env(1)%temp          => temp
@@ -372,6 +388,10 @@ SUBROUTINE api_set_glm_env()
    env(1)%ss4           =>  tss !ss4
 
    env(1)%ustar_bed     => feedback !ustar_bed
+   env(1)%u_star        => u_star_api
+   env(1)%Q_net         => Q_net_api
+   env(1)%delzBlueIce   => delzBlueIce_api
+   env(1)%delzWhiteIce  => delzWhiteIce_api
    env(1)%wv_uorb       => feedback !wv_uorb
    env(1)%wv_t          => feedback !wv_t
    env(1)%layer_stress  => layer_stress(1)
@@ -428,6 +448,12 @@ SUBROUTINE api_set_glm_data()                     BIND(C, name=_WQ_SET_GLM_DATA)
    ALLOCATE(cc_diag(n_vars_diag, MaxLayers),stat=status)
    IF (status /= 0) STOP 'allocate_memory(): Error allocating (cc_diag)'
    cc_diag = zero_
+   ALLOCATE(cc_diag_old(n_vars_diag, MaxLayers),stat=status)
+   IF (status /= 0) STOP 'allocate_memory(): Error allocating (cc_diag_old)'
+   cc_diag_old = zero_
+   ALLOCATE(z_prev(MaxLayers),stat=status)
+   IF (status /= 0) STOP 'allocate_memory(): Error allocating (z_prev)'
+   z_prev = zero_
 
    !# Allocate diagnostic variable array and set all values to zero.
    !# (needed because time-integrated/averaged variables will increment rather than set the array)
@@ -560,8 +586,10 @@ SUBROUTINE api_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
 !
 !LOCALS
    LOGICAL :: doSurface
-   INTEGER :: lev, zon
-   AED_REAL :: surf, pa
+   INTEGER :: lev, zon, j, k, j_d
+   INTEGER, SAVE :: wlev_prev = 0
+   AED_REAL :: surf, pa, ratio
+   TYPE(aed_variable_t),POINTER :: tv
 !
 !-------------------------------------------------------------------------------
 !BEGIN
@@ -574,9 +602,11 @@ SUBROUTINE api_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
    !# re-compute the layer heights and depths
    dz(1) = lheights(1)
    depth(1) = surf - lheights(1)
+   layer_area(1) = area(1)
    DO lev=2,wlev
       dz(lev) = lheights(lev) - lheights(lev-1)
       depth(lev) = surf - lheights(lev)
+      layer_area(lev) = area(lev) - area(lev-1)   ! incremental area: cumulative gained at this layer
    ENDDO
 
    !# Calculate local pressure
@@ -595,8 +625,53 @@ SUBROUTINE api_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
       ENDDO
    ENDIF
 
+   !# Reset benthic sheet diagnostics each timestep — api_copy_from_zone accumulates into cc_diag_hz
+   cc_diag_hz = 0.
+
+   !# Save snapshot then interpolate zavg diagnostics if new layers were added this step
+   cc_diag_old = cc_diag
+   IF (wlev > wlev_prev .AND. wlev_prev > 0) THEN
+      j_d = 0
+      DO k = 1, n_aed_vars
+         IF ( aed_get_var(k, tv) ) THEN
+            IF ( tv%var_type == V_DIAGNOSTIC .AND. .NOT. tv%sheet ) THEN
+               j_d = j_d + 1
+               IF ( tv%zavg ) THEN
+                  j = 1
+                  cc_diag(j_d, 1) = cc_diag_old(j_d, 1)
+                  DO lev = 2, wlev - 1
+                     IF (lheights(lev) < z_prev(1)) THEN
+                        cc_diag(j_d, lev) = cc_diag_old(j_d, 1)
+                     ELSE
+                        DO
+                           IF (lheights(lev) >= z_prev(j) .AND. lheights(lev) <= z_prev(j+1)) THEN
+                              ratio = (lheights(lev) - z_prev(j)) / (z_prev(j+1) - z_prev(j))
+                              cc_diag(j_d, lev) = (1.0-ratio)*cc_diag_old(j_d, j) + ratio*cc_diag_old(j_d, j+1)
+                              EXIT
+                           ELSE
+                              IF (j < wlev_prev - 1) THEN
+                                 j = j + 1
+                              ELSE
+                                 EXIT
+                              ENDIF
+                           ENDIF
+                        ENDDO
+                     ENDIF
+                  ENDDO
+                  cc_diag(j_d, wlev) = cc_diag_old(j_d, wlev_prev)
+               ENDIF
+            ENDIF
+         ENDIF
+      ENDDO
+   ENDIF
+
    doSurface = .NOT. ice
    CALL aed_run_model(1, wlev, doSurface)
+
+   !# Save layer count and heights for interpolation on next timestep
+   wlev_prev = wlev
+   z_prev(1:wlev) = lheights(1:wlev)
+
 END SUBROUTINE api_do_glm
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -613,6 +688,8 @@ SUBROUTINE api_clean_glm()                           BIND(C, name=_WQ_CLEAN_GLM)
 !   IF (ASSOCIATED(cc_hz))     NULLIFY(cc_hz)
 !   IF (ALLOCATED(cc_diag))    DEALLOCATE(cc_diag)
 !   IF (ALLOCATED(cc_diag_hz)) DEALLOCATE(cc_diag_hz)
+   IF (ALLOCATED(cc_diag_old)) DEALLOCATE(cc_diag_old)
+   IF (ALLOCATED(z_prev))      DEALLOCATE(z_prev)
    IF (ALLOCATED(par))        DEALLOCATE(par)
    IF (ALLOCATED(nir))        DEALLOCATE(nir)
    IF (ALLOCATED(uva))        DEALLOCATE(uva)
@@ -621,6 +698,7 @@ SUBROUTINE api_clean_glm()                           BIND(C, name=_WQ_CLEAN_GLM)
    IF (ALLOCATED(dz))         DEALLOCATE(dz)
    IF (ALLOCATED(tss))        DEALLOCATE(tss)
    IF (ALLOCATED(depth))      DEALLOCATE(depth)
+   IF (ALLOCATED(layer_area)) DEALLOCATE(layer_area)
    IF (ASSOCIATED(sed_zones)) DEALLOCATE(sed_zones)
    IF (ALLOCATED(feedback))   DEALLOCATE(feedback)
    IF (ALLOCATED(externalid)) DEALLOCATE(externalid)
