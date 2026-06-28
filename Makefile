@@ -71,7 +71,7 @@ incdir=src
 objdir=obj
 moddir=mod
 
-TARGETS=glm
+TARGETS=glm libglm.${so_ext}
 DEFINES=
 FINCLUDES=-I${incdir} -I$(UTILDIR)/include
 CINCLUDES=-I${incdir} -I$(UTILDIR)/include
@@ -396,6 +396,8 @@ OBJS=${objdir}/glm_globals.o \
      ${objdir}/glm_oxygenation.o \
      ${objdir}/glm_main.o
 
+LIBOBJS=$(filter-out ${objdir}/glm_main.o,$(OBJS)) ${objdir}/glm_lib.o
+
 ifeq ($(USE_DL),true)
   LIBS+=-ldl
   CFLAGS+=-DUSE_DL_LOADER=1
@@ -432,11 +434,20 @@ glm: ${objdir} ${moddir} $(OBJS) $(GLM_DEPS) $(RES)
 glm+: ${objdir} ${moddir} $(OBJS) $(GLM_DEPS) $(RESP)
 	$(LINK) -o $@ $(EXTRALINKFLAGS) $(OBJS) $(RESP) $(WQLIBS) $(LIBS) $(FLIBS)
 
+# Shared library for Python/ctypes (libglm.so or libglm.dylib)
+# Build after: make glm (or glm+). Requires AED libs. Use: make libglm.so WITH_PLOTS=false
+libglm.${so_ext}: ${objdir} ${moddir} $(LIBOBJS) $(GLM_DEPS)
+	$(FC) -shared -Wl,--no-undefined -o $@ $(LIBOBJS) $(RES) $(WQLIBS) $(LIBS) $(FLIBS)
+
+${objdir}/glm_lib.o: ${srcdir}/glm_lib.c ${incdir}/glm.h
+	$(CC) -fPIC $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
+
 clean: ${objdir} ${moddir}
 	@touch ${objdir}/1.o ${moddir}/1.mod 1.t 1__genmod.f90 glm 1.${so_ext} glm_test_bird macos/glm.app macos/glm+.app
 	@touch debian/.debhelper debian/files debian/control
 	@touch debian/glm debian/glm.debhelper.log debian/glm.substvars
 	@touch debian/glm+ debian/glm+.debhelper.log debian/glm+.substvars
+	@/bin/rm -f glm glm+ libglm.${so_ext}
 	@/bin/rm ${moddir}/*.mod ${objdir}/*.o *.t *__genmod.f90 *.${so_ext} glm_test_bird
 	@/bin/rm -rf debian/.debhelper debian/files debian/control
 	@/bin/rm -rf debian/glm debian/glm.debhelper.log debian/glm.substvars
@@ -444,10 +455,10 @@ clean: ${objdir} ${moddir}
 	@echo Made clean
 
 distclean: clean
-	@/bin/rm -rf ${objdir} ${moddir} glm glm+ macos/glm.app macos/glm+.app
+	@/bin/rm -rf ${objdir} ${moddir} glm glm+ libglm.${so_ext} macos/glm.app macos/glm+.app
 
 ${objdir}/%.o: ${srcdir}/%.F90 ${incdir}/glm.h
-	$(FC) $(FFLAGS) $(EXTFFLAGS) -c $< -o $@
+	$(FC) -fPIC $(FFLAGS) $(EXTFFLAGS) -c $< -o $@
 
 ${objdir}/glm_main.o: ${srcdir}/glm_main.c ${incdir}/glm.h
 	$(CC) -DBUILDDATE=\"${BUILDDATE}\" $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
@@ -459,7 +470,7 @@ ${objdir}/glm+_rc.o: win/glm+.rc
 	windres $< -o $@
 
 ${objdir}/%.o: ${srcdir}/%.c ${incdir}/glm.h
-	$(CC) $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
+	$(CC) -fPIC $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
 
 %.${so_ext}:
 	$(LD) ${SHARED} $(LDFLAGS) \
