@@ -1142,7 +1142,7 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
 //            memset(sed_vwc, 0, sizeof(AED_REAL)*sed_layers);
 //            memset(sed_temps, 0, sizeof(AED_REAL)*sed_layers);
 
-              for (z = 1; z < n_zones; z++) {
+              for (z = 0; z < n_zones; z++) {
                   // call the dynamic soil/sediment temperature model
                   /*
                   SoilTemp( &theZones[z].n_sed_layers,
@@ -1156,7 +1156,7 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
                   // ZSoilTemp advances this zone's sediment temperature profile
                   // and stores the sediment-water interface heat flux (W/m2) in
                   // theZones[z].heatflux.
-                  ZSoilTemp(&theZones[z]);
+                  if ( p_wq_ZSoilTemp != NULL ) ZSoilTemp(&theZones[z]);
 #endif
                   // flux heat from the soil into the water, if the layer is over z
                   for (i = botmLayer+1; i <= surfLayer; i++) {

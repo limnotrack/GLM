@@ -394,6 +394,7 @@ OBJS=${objdir}/glm_globals.o \
      ${objdir}/glm_balance.o \
      ${objdir}/glm_heatexchange.o \
      ${objdir}/glm_oxygenation.o \
+     ${objdir}/glm_bubbler.o \
      ${objdir}/glm_main.o
 
 ifeq ($(USE_DL),true)

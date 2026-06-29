@@ -64,6 +64,7 @@
 #include "glm_balance.h"
 #include "glm_heatexchange.h"
 #include "glm_oxygenation.h"
+#include "glm_bubbler.h"
 #include "glm_restart.h"
 #ifdef PLOTS
 #include <libplot.h>
@@ -170,6 +171,8 @@ void init_model(int *jstart, int *nsave)
     psubday = timestep * (*nsave) / SecsPerDay;
     plotstep = 0;
 #endif
+
+    if ( bubbler_on ) init_bubbler();
 
     //# Create the output files.
     init_output(*jstart, out_dir, out_fn, MaxLayers, Longitude, Latitude);
@@ -911,6 +914,8 @@ int do_subdaily_loop(int stepnum, int jday, int stoptime, int nsave, AED_REAL SW
     part_day_per_step = timestep / SecsPerDay;
     MetData.AirPres = atm_pressure_sl;
 
+    if ( bubbler_on ) read_bubbler(jday);
+
     /**************************************************************************
      *  Loop for each second in a day (86400 = #seconds in a day)             *
      **************************************************************************/
@@ -1016,6 +1021,8 @@ int do_subdaily_loop(int stepnum, int jday, int stoptime, int nsave, AED_REAL SW
         //#If sub-daily re-set SWold
         if ( subdaily ) SWold = SWnew;
 
+        if ( bubbler_on ) do_bubbler(jday, iclock);
+
 //      printf("stepnum %d\n", stepnum);
         iclock += noSecs;
         yearday += part_day_per_step;
@@ -1037,6 +1044,8 @@ int do_subdaily_loop(int stepnum, int jday, int stoptime, int nsave, AED_REAL SW
     plotstep = 0;
 #endif
 
+    if ( bubbler_on ) write_bubbler(jday);
+
     return stepnum;
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -1049,6 +1058,8 @@ void end_model()
 {
     fputc('\n', stdout);
 
+    if ( bubbler_on ) print_bubbler();
+
     close_kw_files();
     close_met_files();
     close_inflow_files();
@@ -1056,6 +1067,8 @@ void end_model()
     close_withdrtemp_files();
 
     if (wq_calc) wq_clean_glm();    //# deallocataes wq stuff
+
+    if ( bubbler_on ) done_bubbler();
 
     close_output();
 

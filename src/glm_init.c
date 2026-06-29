@@ -694,6 +694,42 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
 
+    /*-- %%NAMELIST bubbler --------------------------------------------------*/
+    extern LOGICAL         bubbler_on;
+    extern char           *bubbler_data_file;
+    extern AED_REAL        bubbler_aflow;
+    extern int             bubbler_nports;
+    extern AED_REAL        bubbler_bublen;
+    extern AED_REAL        bubbler_bdepth;
+    extern LOGICAL         bubbler_opopt;
+    extern AED_REAL        bubbler_ton;
+    extern AED_REAL        bubbler_toff;
+    extern LOGICAL         bubbler_intopt;
+    extern char           *bubbler_start;
+    extern char           *bubbler_stop;
+    extern LOGICAL         bubbler_eff;
+    extern char           *bubbler_eff_file;
+    //==========================================================================
+    NAMELIST bubbler[] = {
+          { "bubbler",           TYPE_START,            NULL                  },
+          { "on",                TYPE_BOOL,             &bubbler_on           },
+          { "data_file",         TYPE_STR,              &bubbler_data_file    },
+          { "aflow",             TYPE_DOUBLE,           &bubbler_aflow        },
+          { "nports",            TYPE_INT,              &bubbler_nports       },
+          { "bublen",            TYPE_DOUBLE,           &bubbler_bublen       },
+          { "bdepth",            TYPE_DOUBLE,           &bubbler_bdepth       },
+          { "opopt",             TYPE_BOOL,             &bubbler_opopt        },
+          { "ton",               TYPE_DOUBLE,           &bubbler_ton          },
+          { "toff",              TYPE_DOUBLE,           &bubbler_toff         },
+          { "intopt",            TYPE_BOOL,             &bubbler_intopt       },
+          { "start",             TYPE_STR,              &bubbler_start        },
+          { "stop",              TYPE_STR,              &bubbler_stop         },
+          { "eff",               TYPE_BOOL,             &bubbler_eff          },
+          { "eff_file",          TYPE_STR,              &bubbler_eff_file     },
+          { NULL,                TYPE_END,              NULL                  }
+    };
+    /*-- %%END NAMELIST ------------------------------------------------------*/
+
     //-------------------------------------------------
     CLOGICAL err = FALSE;
     int i, j, k;
@@ -1083,6 +1119,11 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
      * integrates the N-2 interior nodes (see zZSoilTemp).                    *
      **************************************************************************/
     if ( sed_heat_model == 2 ) {
+        if ( ! wq_calc ) {
+            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires an active WQ module (aed/api);\n");
+            fprintf(stderr, "            the dynamic soil-temperature solver (zZSoilTemp) is provided by the WQ library.\n");
+            exit(1);
+        }
         if ( n_zones <= 0 || theZones == NULL ) {
             fprintf(stderr, "     ERROR: sed_heat_model = 2 requires sediment zones (benthic_mode = 2)\n");
             exit(1);
@@ -1511,6 +1552,21 @@ for (i = 0; i < n_zones; i++) {
             if ( oxy_fl != NULL && oxy_fl[0] != NULL )
                 oxy_open_recirc_file(oxy_fl[0], timefmt_oxy);
         }
+    }
+
+    // Read bubbler configuration (optional block)
+    if ( get_namelist(namlst, bubbler) )
+        bubbler_on = FALSE;
+    if ( bubbler_on ) {
+        //# namelist strings are freed by close_namelist below; the bubbler
+        //# reads them later (init_bubbler), so keep persistent copies here.
+        if ( bubbler_data_file != NULL ) bubbler_data_file = strdup(bubbler_data_file);
+        if ( bubbler_start     != NULL ) bubbler_start     = strdup(bubbler_start);
+        if ( bubbler_stop      != NULL ) bubbler_stop      = strdup(bubbler_stop);
+        if ( bubbler_eff_file  != NULL ) bubbler_eff_file  = strdup(bubbler_eff_file);
+
+        if ( bubbler_data_file != NULL )
+            open_bubbler_file(bubbler_data_file, NULL);
     }
 
     get_namelist(namlst, debugging);
