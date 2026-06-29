@@ -492,7 +492,7 @@ libglm_wq_fabm.${so_ext}: ${objdir}/glm_zones.o ${objdir}/glm_fabm.o ${objdir}/o
 # special needs dependancies
 
 ${objdir}/aed_external.o: ../libaed-water/src/aed_external.F90
-	$(FC) $(FFLAGS) $(EXTFFLAGS) $(OMPFLAG) -c $< -o $@
+	$(FC) -fPIC $(FFLAGS) $(EXTFFLAGS) $(OMPFLAG) -c $< -o $@
 
 ${objdir}/glm_globals.o: ${srcdir}/glm_globals.c ${incdir}/glm_globals.h ${incdir}/glm.h
 ${objdir}/glm_plugin.o: ${srcdir}/glm_plugin.c ${incdir}/glm_plugin.h ${incdir}/glm.h
