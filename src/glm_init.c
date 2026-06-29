@@ -546,20 +546,20 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     /*-- %%END NAMELIST ------------------------------------------------------*/
 
     /*-- %%NAMELIST sediment -------------------------------------------------*/
-//  extern int       benthic_mode;
-//  int              n_zones;
+    //# --- role 1: zone geometry / properties (benthic_mode & n_zones are globals) ---
     AED_REAL        *zone_heights = NULL;
-    extern CLOGICAL  sed_heat_sw;
-    extern int       sed_heat_model;
-    extern AED_REAL  sed_heat_Ksoil;
-    extern AED_REAL  sed_temp_depth;
-    extern AED_REAL *sed_temp_mean;
-    extern AED_REAL *sed_temp_amplitude;
-    extern AED_REAL *sed_temp_peak_doy;
     extern AED_REAL *sed_reflectivity;
     extern AED_REAL *sed_roughness;
-//  extern AED_REAL *sed_temp_amplitude;
-//  extern AED_REAL *sed_temp_peak_doy;
+    //# --- role 2: sediment temperature model ---
+    extern CLOGICAL  sed_heat_sw;        // auto-enabled when &sediment is present (not a key)
+    extern int       sed_heat_model;
+    //#   static model (sed_heat_model = 1): annual sinusoid
+    extern AED_REAL *sed_temp_mean;      // annual mean (also = deep-soil temp for model 2)
+    extern AED_REAL *sed_temp_amplitude;
+    extern AED_REAL *sed_temp_peak_doy;
+    extern AED_REAL  sed_heat_Ksoil;
+    extern AED_REAL  sed_temp_depth;     // model 1: depth-scale ZSED; model 2: soil-column depth
+    //#   dynamic soil model (sed_heat_model = 2): layered conduction
     extern int       n_sed_layers;
     extern AED_REAL *sed_layer_depth;
     extern AED_REAL *sed_vwc;
@@ -567,17 +567,27 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     //==========================================================================
     NAMELIST sediment[] = {
           { "sediment",          TYPE_START,            NULL                  },
+
+          //# zone geometry / properties
           { "benthic_mode",      TYPE_INT,              &benthic_mode         },
           { "n_zones",           TYPE_INT,              &n_zones              },
           { "zone_heights",      TYPE_DOUBLE|MASK_LIST, &zone_heights         },
           { "sed_reflectivity",  TYPE_DOUBLE|MASK_LIST, &sed_reflectivity     },
           { "sed_roughness",     TYPE_DOUBLE|MASK_LIST, &sed_roughness        },
+
+          //# sediment temperature model:  1 = static (annual sinusoid),  2 = dynamic (soil column)
+          { "sed_heat_model",    TYPE_INT,              &sed_heat_model       },
+
+          //#   static model (sed_heat_model = 1)
           { "sed_temp_mean",     TYPE_DOUBLE|MASK_LIST, &sed_temp_mean        },
           { "sed_temp_amplitude",TYPE_DOUBLE|MASK_LIST, &sed_temp_amplitude   },
           { "sed_temp_peak_doy", TYPE_DOUBLE|MASK_LIST, &sed_temp_peak_doy    },
           { "sed_heat_Ksoil",    TYPE_DOUBLE,           &sed_heat_Ksoil       },
           { "sed_temp_depth",    TYPE_DOUBLE,           &sed_temp_depth       },
-          { "sed_heat_model",    TYPE_INT,              &sed_heat_model       },
+
+          //#   dynamic soil model (sed_heat_model = 2)
+          //#     sed_temp_mean (above) = deep-soil temp;  sed_temp_depth (above) = soil-column depth
+          //#     sed_layer_depth is OPTIONAL: omit it to auto-build the grid from n_sed_layers + sed_temp_depth
           { "n_sed_layers",      TYPE_INT,              &n_sed_layers         },
           { "sed_layer_depth",   TYPE_DOUBLE|MASK_LIST, &sed_layer_depth      },
           { "sed_vwc",           TYPE_DOUBLE|MASK_LIST, &sed_vwc              },
@@ -1128,11 +1138,30 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
             fprintf(stderr, "     ERROR: sed_heat_model = 2 requires sediment zones (benthic_mode = 2)\n");
             exit(1);
         }
-        if ( n_sed_layers < 3 || sed_layer_depth == NULL ) {
-            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires n_sed_layers >= 3 and a sed_layer_depth list\n");
+        if ( n_sed_layers < 3 ) {
+            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires n_sed_layers >= 3\n");
             exit(1);
         }
-        if ( get_nml_listlen(namlst, "sediment", "sed_layer_depth") < n_sed_layers ) {
+        /* The node grid is set either by an explicit sed_layer_depth list, or
+         * (if none is given) built geometrically over [0, sed_temp_depth] -- so
+         * the soil-column depth is controlled by sed_temp_depth.  sed_temp_depth
+         * is shared with the static model, where it is the conductive depth-
+         * scale ZSED.  NOTE: placeholder geometric grid; #4 will align it with
+         * the Python intertidal-soil grid generator. */
+        if ( sed_layer_depth == NULL ) {
+            if ( sed_temp_depth <= 0.0 ) {
+                fprintf(stderr, "     ERROR: sed_heat_model = 2 needs either a sed_layer_depth list "
+                                "or sed_temp_depth > 0 (the soil-column depth)\n");
+                exit(1);
+            }
+            sed_layer_depth = malloc(n_sed_layers * sizeof(AED_REAL));
+            AED_REAL r = 1.6, denom = pow(r, n_sed_layers - 1) - 1.0;
+            for (k = 0; k < n_sed_layers; k++)
+                sed_layer_depth[k] = sed_temp_depth * (pow((double)r, (double)k) - 1.0) / denom;
+            if (quiet < 2)
+                fprintf(stderr, "     sed_heat_model = 2: auto soil grid, %d nodes over %.3f m "
+                        "(sed_temp_depth)\n", n_sed_layers, sed_temp_depth);
+        } else if ( get_nml_listlen(namlst, "sediment", "sed_layer_depth") < n_sed_layers ) {
             fprintf(stderr, "     ERROR: sed_layer_depth list shorter than n_sed_layers (%d)\n", n_sed_layers);
             exit(1);
         }
