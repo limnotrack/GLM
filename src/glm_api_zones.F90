@@ -244,7 +244,8 @@ SUBROUTINE api_copy_to_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag, 
 !RQT
       z_cc(1:nvars,1,zon) = z_cc(1:nvars,1,zon) + x_cc(1:nvars,lev)  ! level=1 to match aedZones(zon)%z_cc => z_cc(:,1,:) pointer
 
-      z_diag(:,zon,zon) = z_diag(:,zon,zon) + x_diag(:,lev)      ! level=zon so cell(zon) correct with layer_idx=zon
+     !z_diag(:,zon,zon) = z_diag(:,zon,zon) + x_diag(:,lev)      ! level=zon so cell(zon) correct with layer_idx=zon
+      z_diag(:,1,zon) = z_diag(:,1,zon) + x_diag(:,lev)          ! level=1 matches agnostic library wiring z_cc_diag => z_diag(:,1,:) (cell(zon) -> z_diag(:,1,zon))
 
       aedZones(zon)%z_env%z_temp         = aedZones(zon)%z_env%z_temp + theLake(lev)%Temp
       aedZones(zon)%z_env%z_salt         = aedZones(zon)%z_env%z_salt + theLake(lev)%Salinity
@@ -261,7 +262,8 @@ SUBROUTINE api_copy_to_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag, 
 
    DO zon=1,a_zones
       z_cc(1:nvars,1,zon) = z_cc(1:nvars,1,zon)/zcount(zon)   ! level=1 to match pointer
-      z_diag(:,zon,zon)   = z_diag(:,zon,zon)/zcount(zon)    ! level=zon matches accumulation and layer_idx=zon
+     !z_diag(:,zon,zon)   = z_diag(:,zon,zon)/zcount(zon)    ! level=zon matches accumulation and layer_idx=zon
+      z_diag(:,1,zon)     = z_diag(:,1,zon)/zcount(zon)      ! level=1 matches agnostic library wiring z_cc_diag => z_diag(:,1,:)
 !     z_diag_hz(:,zon)    = z_diag_hz(:,zon)/zcount(zon)
 
       ! Set the water column above a zone, to the respective water layer values
@@ -397,7 +399,8 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(j,lev) = z_diag(j,zon,zon) * scale
+                       !x_diag(j,lev) = z_diag(j,zon,zon) * scale
+                        x_diag(j,lev) = z_diag(j,1,zon) * scale   ! level=1 matches library z_cc_diag => z_diag(:,1,:)
                      ENDIF
                   ENDIF
                ENDIF
@@ -417,7 +420,8 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(j,lev) = x_diag(j,lev) + (z_diag(j,zon,zon) * (1.0 - scale))
+                       !x_diag(j,lev) = x_diag(j,lev) + (z_diag(j,zon,zon) * (1.0 - scale))
+                        x_diag(j,lev) = x_diag(j,lev) + (z_diag(j,1,zon) * (1.0 - scale))   ! level=1 matches library z_cc_diag => z_diag(:,1,:)
                      ENDIF
                   ENDIF
                ENDIF
@@ -435,7 +439,8 @@ SUBROUTINE api_copy_from_zone(aedZones, n_zones, wheights, x_cc, x_cc_hz, x_diag
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(j,lev) = z_diag(j,zon,zon)
+                       !x_diag(j,lev) = z_diag(j,zon,zon)
+                        x_diag(j,lev) = z_diag(j,1,zon)   ! level=1 matches library z_cc_diag => z_diag(:,1,:)
                      ENDIF
                   ENDIF
                ENDIF

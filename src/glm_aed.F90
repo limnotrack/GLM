@@ -845,6 +845,7 @@ SUBROUTINE aed_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
    AED_REAL :: min_C, surf, ratio
    INTEGER  :: i, j, v, lev, split, k, j_d
    INTEGER, SAVE :: wlev_prev = 0
+   LOGICAL  :: grid_changed
 
    TYPE (aed_column_t) :: column(n_aed_vars)
    TYPE (aed_column_t) :: column_sed(n_aed_vars)
@@ -889,37 +890,79 @@ SUBROUTINE aed_do_glm(wlev)                             BIND(C, name=_WQ_DO_GLM)
    !cc_diag = 0.    ! not reset — zavg diagnostics (e.g. ch4_ebb_dsfv) must persist between timesteps
    cc_diag_hz = 0.   ! Reset benthic diagnostics; will be re-populated in modules
 
-   ! Save snapshot then interpolate zavg diagnostics if new layers were added this step
+   ! Save snapshot then remap zavg diagnostics onto the new layer grid.
    cc_diag_old = cc_diag
-   IF (wlev > wlev_prev .AND. wlev_prev > 0) THEN
+   ! ---- ORIGINAL (growth-only remap; revert by re-enabling this block) ----
+   ! Only remapped when layers were ADDED (wlev > wlev_prev); left persisted zavg
+   ! diagnostics (e.g. ch4_ebb_dsfv) on a stale grid during drawdown (wlev shrinking)
+   ! and same-count reshapes. Replaced by the general remap below.
+   !IF (wlev > wlev_prev .AND. wlev_prev > 0) THEN
+   !   j_d = 0
+   !   DO k = 1, n_aed_vars
+   !      IF ( aed_get_var(k, tv) ) THEN
+   !         IF ( tv%diag .AND. .NOT. tv%sheet ) THEN
+   !            j_d = j_d + 1
+   !            IF ( tv%zavg ) THEN
+   !               j = 1
+   !               cc_diag(j_d, 1) = cc_diag_old(j_d, 1)
+   !               DO i = 2, wlev - 1
+   !                  IF (height(i) < z_prev(1)) THEN
+   !                     cc_diag(j_d, i) = cc_diag_old(j_d, 1)
+   !                  ELSE
+   !                     DO
+   !                        IF (height(i) >= z_prev(j) .AND. height(i) <= z_prev(j+1)) THEN
+   !                           ratio = (height(i) - z_prev(j)) / (z_prev(j+1) - z_prev(j))
+   !                           cc_diag(j_d, i) = (1.0-ratio)*cc_diag_old(j_d, j) + ratio*cc_diag_old(j_d, j+1)
+   !                           EXIT
+   !                        ELSE
+   !                           IF (j < wlev_prev - 1) THEN
+   !                              j = j + 1
+   !                           ELSE
+   !                              EXIT
+   !                           ENDIF
+   !                        ENDIF
+   !                     ENDDO
+   !                  ENDIF
+   !               ENDDO
+   !               cc_diag(j_d, wlev) = cc_diag_old(j_d, wlev_prev)
+   !            ENDIF
+   !         ENDIF
+   !      ENDIF
+   !   ENDDO
+   !ENDIF
+   ! ---- GENERAL remap: grow, SHRINK (drawdown), or same-count reshape (mixing). ----
+   ! No-op when the grid is unchanged (each new height matches an old one -> ratio 0).
+   ! Linear (intensive) interpolation is correct for rate diagnostics like ch4_ebb_dsfv.
+   grid_changed = ( wlev /= wlev_prev )
+   IF ( .NOT. grid_changed .AND. wlev_prev > 0 ) grid_changed = ANY( height(1:wlev) /= z_prev(1:wlev) )
+   IF ( grid_changed .AND. wlev_prev > 0 ) THEN
       j_d = 0
       DO k = 1, n_aed_vars
          IF ( aed_get_var(k, tv) ) THEN
             IF ( tv%diag .AND. .NOT. tv%sheet ) THEN
                j_d = j_d + 1
                IF ( tv%zavg ) THEN
-                  j = 1
-                  cc_diag(j_d, 1) = cc_diag_old(j_d, 1)
-                  DO i = 2, wlev - 1
-                     IF (height(i) < z_prev(1)) THEN
-                        cc_diag(j_d, i) = cc_diag_old(j_d, 1)
+                  DO i = 1, wlev
+                     IF     (height(i) <= z_prev(1))         THEN
+                        cc_diag(j_d, i) = cc_diag_old(j_d, 1)            ! at/below old bottom
+                     ELSEIF (height(i) >= z_prev(wlev_prev)) THEN
+                        cc_diag(j_d, i) = cc_diag_old(j_d, wlev_prev)    ! at/above old top (covers growth)
                      ELSE
+                        j = 1
                         DO
                            IF (height(i) >= z_prev(j) .AND. height(i) <= z_prev(j+1)) THEN
                               ratio = (height(i) - z_prev(j)) / (z_prev(j+1) - z_prev(j))
                               cc_diag(j_d, i) = (1.0-ratio)*cc_diag_old(j_d, j) + ratio*cc_diag_old(j_d, j+1)
                               EXIT
+                           ELSEIF (j < wlev_prev - 1) THEN
+                              j = j + 1
                            ELSE
-                              IF (j < wlev_prev - 1) THEN
-                                 j = j + 1
-                              ELSE
-                                 EXIT
-                              ENDIF
+                              cc_diag(j_d, i) = cc_diag_old(j_d, wlev_prev)
+                              EXIT
                            ENDIF
                         ENDDO
                      ENDIF
                   ENDDO
-                  cc_diag(j_d, wlev) = cc_diag_old(j_d, wlev_prev)
                ENDIF
             ENDIF
          ENDIF
