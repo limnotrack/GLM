@@ -297,6 +297,88 @@ static AED_REAL calculate_density_TEOS(AED_REAL temp, AED_REAL salt)
 
 /******************************************************************************
  *                                                                            *
+ * Absolute Salinity (g/kg) from Practical Salinity, using only the reference *
+ * composition factor SA = (35.16504/35)*SP. The spatially-varying salinity   *
+ * anomaly (gsw_saar atlas) is deliberately NOT applied: it is calibrated for *
+ * seawater composition and is not representative of inland/limnic waters.    *
+ * An optional composition offset could be added here in future.              *
+ *                                                                            *
+ ******************************************************************************/
+static AED_REAL gsw_sa_from_sp(AED_REAL sp)
+{
+    return (35.16504/35.0) * sp;
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
+ *                                                                            *
+ * Conservative Temperature (deg C) from potential temperature (deg C) and    *
+ * Absolute Salinity (g/kg), using the TEOS-10 potential-enthalpy polynomial  *
+ * (GSW-C gsw_ct_from_pt).                                                     *
+ *                                                                            *
+ * Note: at the surface reference pressure used by the density_model == 3     *
+ * path, in-situ temperature and potential temperature are equal to within    *
+ * ~1e-3 deg C (adiabatic lapse over ~10 dbar), so the in-situ temperature is *
+ * passed here directly as potential temperature. The full in-situ->potential *
+ * conversion (gsw_pt0_from_t) becomes necessary only for the thermobaricity  *
+ * stage, where a depth-dependent pressure is used.                           *
+ *                                                                            *
+ ******************************************************************************/
+static AED_REAL gsw_ct_from_pt(AED_REAL sa, AED_REAL pt)
+{
+    const AED_REAL gsw_sfac = 0.0248826675584615;  /* mirrors gsw_const.h    */
+    const AED_REAL gsw_cp0  = 3991.86795711963;    /* TEOS-10 heat capacity  */
+    AED_REAL x2, x, y, pot_enthalpy;
+
+    x2 = gsw_sfac*sa;
+    x  = sqrt(x2);
+    y  = pt*0.025;  /* normalise temperature */
+
+    pot_enthalpy =  61.01362420681071 + y*(168776.46138048015 +
+        y*(-2735.2785605119625 + y*(2574.2164453821433 +
+        y*(-1536.6644434977543 + y*(545.7340497931629 +
+        y*(-50.91091728474331 - 18.30489878927802*y)))))) +
+        x2*(268.5520265845071 + y*(-12019.028203559312 +
+        y*(3734.858026725145 + y*(-2046.7671145057618 +
+        y*(465.28655623826234 + y*(-0.6370820302376359 -
+        10.650848542359153*y))))) +
+        x*(937.2099110620707 + y*(588.1802812170108 +
+        y*(248.39476522971285 + y*(-3.871557904936333 -
+        2.6268019854268356*y))) +
+        x*(-1687.914374187449 + x*(246.9598888781377 +
+        x*(123.59576582457964 - 48.5891069025409*x)) +
+        y*(936.3206544460336 +
+        y*(-942.7827304544439 + y*(369.4389437509002 +
+        y*(-33.83664947895248 - 9.987880382780322*y)))))));
+
+    return (pot_enthalpy/gsw_cp0);
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
+ *                                                                            *
+ * Corrected TEOS-10 density: converts the supplied Practical Salinity and    *
+ * in-situ temperature to Absolute Salinity and Conservative Temperature      *
+ * (the proper TEOS-10 inputs) before evaluating the specific-volume          *
+ * polynomial. Surface reference pressure is retained (potential density);    *
+ * thermobaricity (local pressure) is a separate, later stage.                *
+ *                                                                            *
+ ******************************************************************************/
+static AED_REAL calculate_density_TEOS_SACT(AED_REAL temp, AED_REAL salt)
+{
+    AED_REAL p  = MetData.AirPres/100.;    /* surface pressure [dbar]        */
+    AED_REAL sa = gsw_sa_from_sp(salt);    /* Practical -> Absolute Salinity */
+    AED_REAL ct = gsw_ct_from_pt(sa, temp);/* in-situ temp -> Conservative T */
+
+    return (1.0/gsw_specvol(sa, ct, p));
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
+ *                                                                            *
  * Function to calculate the density (rho) of water at a given temperature    *
  * (deg C) and salinity (ppm)                                                 *
  *                                                                            *
@@ -307,6 +389,7 @@ AED_REAL calculate_density(AED_REAL temp, AED_REAL salt)
         case 0 : return calculate_density_UNESCO(temp, salt);
         case 1 : return calculate_density_TEOS(temp, salt);
 //      case 2 => custom etc .
+        case 3 : return calculate_density_TEOS_SACT(temp, salt);
     }
     return MISVAL;
 }
