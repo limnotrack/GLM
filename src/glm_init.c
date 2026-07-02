@@ -1999,7 +1999,8 @@ void initialise_lake(int namlst)
         if (read_glm_restart(init_restart_fname))
             fprintf(stderr, "     Restart state loaded from %s\n", init_restart_fname);
         else
-            fprintf(stderr, "     WARNING: init_restart_from_file set but could not read '%s'; using profile init\n", init_restart_fname);
+            fprintf(stderr, "     WARNING: init_restart_from_file set but could not read '%s'; using profile init\n",
+                                                                   init_restart_fname);
     }
 }
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
