@@ -282,6 +282,15 @@ void write_glm_restart(const char *fn)
         def_var_d(ncid, "zone_ztemp",     1, &dim_zones, &id_zztemp);
     }
 
+    /* Per-zone bed->water heat accumulated over the run [J], for lake<->aquifer
+     * conductive coupling. Present whenever zones + sediment heating are active
+     * (any sed_heat_model), so it works for the sinusoid (model 1) path too.
+     * WRITE-ONLY: GLM never reads it back, so it cannot perturb restart
+     * continuity; the coupler (Clarena) reads it from the restart_<n>.nc snapshot. */
+    int id_sedenergy = -1;
+    if (sed_zone_energy != NULL)
+        def_var_d(ncid, "sed_zone_energy", 1, &dim_zones, &id_sedenergy);
+
     /* PTM particle state [ptm_stat_vars, ptm_particles] and
      *                    [ptm_wq_vars,   ptm_particles]             */
     int id_ptm_stat = -1, id_ptm_vars = -1;
@@ -482,6 +491,15 @@ void write_glm_restart(const char *fn)
         RST_CHECK(nc_put_var_double(ncid, id_sedhf,   hfbuf));
         RST_CHECK(nc_put_var_double(ncid, id_zztemp,  ztbuf));
         free(stbuf); free(hfbuf); free(ztbuf);
+    }
+
+    /* Per-zone accumulated bed->water heat [J] (write-only; see def above). */
+    if (sed_zone_energy != NULL) {
+        AED_REAL *ebuf = malloc(n_zones * sizeof(AED_REAL));
+        if (!ebuf) { fprintf(stderr, "glm_restart: out of memory\n"); exit(1); }
+        for (int z = 0; z < n_zones; z++) ebuf[z] = sed_zone_energy[z];
+        RST_CHECK(nc_put_var_double(ncid, id_sedenergy, ebuf));
+        free(ebuf);
     }
 
     /* PTM particle state

@@ -1066,6 +1066,13 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
         if (sed_temp_peak_doy == NULL) {
             sed_temp_peak_doy = calloc(t_zones, sizeof(AED_REAL));
         }
+        //# Per-zone bed->water heat accumulator [J]. (Re)allocate and zero every
+        //# run: in library mode GLM globals persist across glm_run_with_nml calls,
+        //# so this zeroing is what resets the per-window integral. calloc() zeroes.
+        if ( n_zones > 0 ) {
+            if ( sed_zone_energy != NULL ) free(sed_zone_energy);
+            sed_zone_energy = calloc(n_zones, sizeof(AED_REAL));
+        }
     }
 
     if (benthic_mode > 1 && n_zones <= 0) {

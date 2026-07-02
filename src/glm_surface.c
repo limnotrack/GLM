@@ -1164,6 +1164,12 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
                       Lake[i].Temp += theZones[z].heatflux
                               * ((Lake[i].LayerArea - Lake[i-1].LayerArea) * noSecs)
                               / (SPHEAT * Lake[i].Density * Lake[i].LayerVol);
+                      //# accumulate the exact Joules delivered to the water from
+                      //# this zone's bed (= flux * bed-contact area * dt), summed
+                      //# over layers and sub-steps -> written to restart.nc.
+                      if ( sed_zone_energy != NULL )
+                        sed_zone_energy[z] += theZones[z].heatflux
+                              * (Lake[i].LayerArea - Lake[i-1].LayerArea) * noSecs;
                     }
                   }
                }
@@ -1181,12 +1187,24 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
                 Lake[i].Temp += soil_heat_flux
                               * ((Lake[i].LayerArea - Lake[i-1].LayerArea) * noSecs)
                               / (SPHEAT * Lake[i].Density * Lake[i].LayerVol);
+                //# accumulate the exact Joules delivered to this layer's water
+                //# from its zone's bed (= flux * flank area * dt) -> restart.nc.
+                if ( sed_zone_energy != NULL )
+                  sed_zone_energy[layer_zone[i]] += soil_heat_flux
+                              * (Lake[i].LayerArea - Lake[i-1].LayerArea) * noSecs;
               }
 
               TYEAR = sed_temp_mean[0] + sed_temp_amplitude[0] * cos(((kDays-sed_temp_peak_doy[0])*2.*Pi)/365.);
-              Lake[botmLayer].Temp += ((KSED * (TYEAR - Lake[botmLayer].Temp) / ZSED) *
+              //# bottom layer sits on the flat lake bed: bed-contact area is its
+              //# full LayerArea. Compute the flux into the local so we can both
+              //# apply it and accumulate the identical Joules (uses pre-update Temp).
+              soil_heat_flux = KSED * (TYEAR - Lake[botmLayer].Temp) / ZSED;
+              Lake[botmLayer].Temp += (soil_heat_flux *
                                       Lake[botmLayer].LayerArea * noSecs) /
                                       (SPHEAT * Lake[botmLayer].Density*Lake[botmLayer].LayerVol);
+              if ( sed_zone_energy != NULL )
+                sed_zone_energy[layer_zone[botmLayer]] += soil_heat_flux
+                              * Lake[botmLayer].LayerArea * noSecs;
             }
         }
 //        if (littoral_sw) {

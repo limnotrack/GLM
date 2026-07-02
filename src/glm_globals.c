@@ -215,6 +215,7 @@ AED_REAL *sed_temp_amplitude = NULL;
 AED_REAL *sed_temp_peak_doy = NULL;
 AED_REAL *sed_reflectivity  = NULL;
 AED_REAL *sed_roughness     = NULL;
+AED_REAL *sed_zone_energy   = NULL; //# per-zone bed->water heat accumulated over the run [J]; zeroed at run start, written (only) to restart.nc for lake<->aquifer coupling
 // sed_heat_model == 2 (dynamic soil/sediment temperature model) configuration.
 // A single soil-column profile is shared across all zones; only the prognostic
 // temperature state and the per-zone deep boundary (sed_temp_mean) differ by zone.

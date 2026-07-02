@@ -311,6 +311,7 @@ extern AED_REAL *sed_temp_amplitude;
 extern AED_REAL *sed_temp_peak_doy;
 extern AED_REAL *sed_reflectivity;
 extern AED_REAL *sed_roughness;
+extern AED_REAL *sed_zone_energy; //# per-zone bed->water heat accumulated over the run [J]
 // sed_heat_model == 2 (dynamic soil/sediment temperature model)
 extern int      n_sed_layers;
 extern AED_REAL *sed_layer_depth;
