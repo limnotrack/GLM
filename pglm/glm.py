@@ -5,7 +5,7 @@ GLM library interface - runs GLM in-process via libglm.so.
 import os
 import ctypes
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 
 def _find_libglm() -> str:
@@ -70,6 +70,34 @@ class GLM:
         self._lib = ctypes.CDLL(path)
         self._lib.glm_run_with_nml.argtypes = [ctypes.c_char_p]
         self._lib.glm_run_with_nml.restype = None
+        self._lib.register_memory_csv.argtypes = [
+            ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t
+        ]
+        self._lib.register_memory_csv.restype = None
+        self._lib.clear_memory_csvs.argtypes = []
+        self._lib.clear_memory_csvs.restype = None
+        self._csv_buffers = []
+        self._name_buffers = []
+
+    def register_memory_csv(self, name: str, content: str) -> None:
+        """Register CSV content in memory so GLM reads from memory instead of disk."""
+        data = content.encode("utf-8")
+        buf = ctypes.create_string_buffer(data)
+        name_buf = ctypes.create_string_buffer(name.encode("utf-8"))
+        self._csv_buffers.append(buf)
+        self._name_buffers.append(name_buf)
+        self._lib.register_memory_csv(name_buf, buf, ctypes.c_size_t(len(data)))
+
+    def register_memory_csv_dict(self, data: Dict[str, str]) -> None:
+        """Register multiple CSVs from {basename: content} dict."""
+        for name, content in data.items():
+            self.register_memory_csv(name, content)
+
+    def clear_memory_csvs(self) -> None:
+        """Clear C-side registry and Python buffers."""
+        self._lib.clear_memory_csvs()
+        self._csv_buffers.clear()
+        self._name_buffers.clear()
 
     def run(
         self,
@@ -87,3 +115,4 @@ class GLM:
         finally:
             if orig:
                 os.chdir(orig)
+            self.clear_memory_csvs()  # reset C registry & buffers so next run starts fresh
