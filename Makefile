@@ -434,6 +434,9 @@ glm+: ${objdir} ${moddir} $(OBJS) $(GLMOBJS) $(GLM_DEPS) $(RESP)
 libglm.${so_ext}: ${objdir} ${moddir} $(OBJS) $(LIBOBJS) $(GLM_DEPS)
 	$(FC) -shared -Wl,--no-undefined -o $@ $(OBJS) $(LIBOBJS) $(RES) $(WQLIBS) $(LIBS) $(FLIBS)
 
+libglm+.${so_ext}: ${objdir} ${moddir} $(OBJS) $(LIBOBJS) $(GLM_DEPS)
+	$(FC) -shared -Wl,--no-undefined -o $@ $(OBJS) $(LIBOBJS) $(RESP) $(WQLIBS) $(LIBS) $(FLIBS)
+
 clean: ${objdir} ${moddir}
 	@touch ${objdir}/1.o ${moddir}/1.mod 1.t 1__genmod.f90 glm 1.${so_ext} glm_test_bird macos/glm.app macos/glm+.app
 	@touch debian/.debhelper debian/files debian/control
