@@ -270,7 +270,7 @@ void do_bubbler(int jday, int iclock)
             if (ibub == 1)
                 cdifBeg = PeI;
 
-            inBubble(intopt, nStepY*MaxLayers);
+            inBubble(intopt, nStepY*MaxLayers + 1);   //# +1: sub-layers are 1-based, top index = (surfLayer+1)*nStepY
 
             check_layer_stability();
             check_layer_thickness();
@@ -587,8 +587,10 @@ static int inner_loop(int iLevel, int level, int *pCountI, int *retI, int NSY, i
         //# Based on series solutions McDougall
         HLAY = yDepth[NSY] - bDepth;
         BIGH = HLAY + HPRES;
+        //# McDougall source-strength parameter M (dimensionless);
+        //# Patterson & Imberger 1989 eq (11) - slip velocity is CUBED
         BIGM = FLOW * PA * (1.E0 + SQLAM) /
-                       (4.E0 * Pi * SQR(ALP) * RHO0 * SQR(BIGH) * SQR(UB));
+                       (4.E0 * Pi * SQR(ALP) * RHO0 * SQR(BIGH) * CUBE(UB));
 
         //#  Change initial height to 1 layer depth
         if (level != NSY)
@@ -600,7 +602,7 @@ static int inner_loop(int iLevel, int level, int *pCountI, int *retI, int NSY, i
         B0 = 2.E0 * ALP * Z *
                (0.6E0 + 0.01719E0 * pow(ZZ/BIGM, 0.333E0) -
                   0.002527E0 * pow(ZZ/BIGM, 0.667E0) +
-                  ZZ * (-0.04609E0+0.000031E0/BIGM));
+                  ZZ * (0.04609E0 - 0.000031E0/BIGM));  //# P&I89 eq (10): +x(0.04609 - 0.000031/M)
         W0 = UB * pow(BIGM/ZZ, 0.333E0) * (1.609E0 - 0.3195E0 * pow(ZZ/BIGM, 0.333E0) +
               0.06693E0 * pow(ZZ/BIGM, 0.667E0) + ZZ * (0.4536E0 - 0.0105E0 / BIGM));
 
@@ -627,7 +629,7 @@ static int inner_loop(int iLevel, int level, int *pCountI, int *retI, int NSY, i
             if (DIM==2) {
                 BIGM = FLOW * PA * (1.0+lm2) / (4.0 * Pi * SQR(alp2) * RHO0 * SQR(BIGH) * CUBE(UB));
                 B0 = 2.0 * alp2 * Z * (0.6E0 + 0.01719E0 * pow(ZZ/BIGM, 0.333E0) -
-                       0.002527E0 * pow(ZZ / BIGM, 0.667E0) + ZZ * (-0.04609E0 + 0.000031E0 / BIGM));
+                       0.002527E0 * pow(ZZ / BIGM, 0.667E0) + ZZ * (0.04609E0 - 0.000031E0 / BIGM));
                 W0 = ub2 * pow(BIGM/ZZ, 0.333E0) * (1.609E0 - 0.3195E0 *
                        pow(ZZ/BIGM, 0.333E0) + 0.06693E0 * pow(ZZ/BIGM, 0.667E0) +
                                   ZZ * (0.4536E0 - 0.0105E0 / BIGM));
@@ -655,14 +657,13 @@ static int inner_loop(int iLevel, int level, int *pCountI, int *retI, int NSY, i
         iTop[pCount] = level;
 
         for (i = level; i <= NSY; i++) {
-            if (W0 <= 0.0) {
-                if (i == level) return FALSE;
-                break;
-            }
+            if (W0 <= 0.0) break;   //# a no-rise plume (i == level) is handled below
 
             if (i == 1) {
-                DZ = yDepth[0];
-                DRH = (yDen[1] - yDen[0]) / (yDepthM[1] - yDepthM[0]);
+                //# index 0 is the virtual bottom node (all zeros) - use values
+                //# one sub-layer up rather than differencing against it
+                DZ = yDepth[1] - yDepth[0];
+                DRH = (yDen[2] - yDen[1]) / (yDepthM[2] - yDepthM[1]);
             } else {
                 DZ = yDepth[i] - yDepth[i-1];
 
@@ -849,6 +850,15 @@ static int inner_loop(int iLevel, int level, int *pCountI, int *retI, int NSY, i
         //# Check to see if iTop(pCount) equals surfLayer (IE. top of water column)
         //# If not set level to iTop(pCount) + 1
         if (iTop[pCount] < NSY) {
+            //# The restart level must strictly increase: a plume that failed to
+            //# rise even one sub-layer leaves iTop[pCount] = level-1, and would
+            //# otherwise freeze level while pCount grows unbounded (stack overflow)
+            if (iTop[pCount] < level) {
+                pCount--;               //# discard the failed plume
+                *pCountI = pCount;
+                if (pCount == 0) return FALSE;   //# no plume formed at all
+                break;
+            }
             level = iTop[pCount] + 1;
             pCount++;
             *pCountI = pCount;
@@ -878,6 +888,7 @@ void inBubble(LOGICAL intopt, int MaxNSy)
     AED_REAL FLOW;
     AED_REAL RHO0;
     AED_REAL QVOLT, QVOL;
+    AED_REAL botH;
 
 #ifndef _VISUAL_C_
     int iTop[MaxNSy];
@@ -915,10 +926,10 @@ void inBubble(LOGICAL intopt, int MaxNSy)
     HL = 0.;
 
 #ifdef _VISUAL_C_
-    ALLOCATE1D_I(iTop, MaxLayers);
+    ALLOCATE1D_I(iTop, MaxNSy);
 
-    ALLOCATE1D_R(T, MaxLayers);      ALLOCATE1D_R(S, MaxLayers);    ALLOCATE1D_R(QF, MaxLayers);
-    ALLOCATE1D_R(PLMDEN, MaxLayers); ALLOCATE1D_R(BFSQ, MaxLayers);
+    ALLOCATE1D_R(T, MaxNSy);      ALLOCATE1D_R(S, MaxNSy);    ALLOCATE1D_R(QF, MaxNSy);
+    ALLOCATE1D_R(PLMDEN, MaxNSy); ALLOCATE1D_R(BFSQ, MaxLayers);   //# BFSQ is layer-indexed
     ALLOCATE1D_R(yDepth, MaxNSy);
     ALLOCATE1D_R(yDepthM, MaxNSy); ALLOCATE1D_R(YVOL, MaxNSy); ALLOCATE1D_R(ENT, MaxNSy);
     ALLOCATE1D_R(W, MaxNSy);     ALLOCATE1D_R(B, MaxNSy);    ALLOCATE1D_R(TH, MaxNSy);
@@ -926,7 +937,7 @@ void inBubble(LOGICAL intopt, int MaxNSy)
     ALLOCATE1D_R(wqx,  Num_WQ_Vars);
 
     ALLOCATE2D(ywqual, Num_WQ_Vars, MaxNSy);
-    ALLOCATE2D(xw,     Num_WQ_Vars, MaxLayers);
+    ALLOCATE2D(xw,     Num_WQ_Vars, MaxNSy);
 #endif
 
     htRise = 0.;
@@ -1013,7 +1024,8 @@ void inBubble(LOGICAL intopt, int MaxNSy)
             if (Lake[i].Height >= bDepth) iLevel = i;
 
         //# Set conditions at starting level
-        RHO0 = Lake[iLevel].Density + 1000.0;
+        //# (GLM stores absolute density; the +1000 sigma-t offset was a DYRESM-ism)
+        RHO0 = Lake[iLevel].Density;
 
         //# pCount is number of plumes
         pCount = 1;
@@ -1032,14 +1044,20 @@ void inBubble(LOGICAL intopt, int MaxNSy)
         }
 
         //# Now get into bubbler internal substeps
-        NSY = surfLayer * nStepY;
+        //# Sub-layer convention (1-based, from the DYRESM Fortran): layer i
+        //# (botmLayer = 0) owns sub-layers [i*nStepY+1 .. (i+1)*nStepY], so the
+        //# top of the column is sub-layer NSY.  Index 0 is a virtual node at
+        //# the lake bottom (all arrays zeroed above).  Every sub-layer of every
+        //# layer must be filled or volumes are lost in the write-back below.
+        NSY = (surfLayer+1) * nStepY;
 
-        for (i = surfLayer; i > iLevel+1; i--) {
+        for (i = surfLayer; i >= botmLayer; i--) {
+            botH = (i == botmLayer) ? 0.0 : Lake[i-1].Height;
             for (j = 1; j <= nStepY; j++) {
-                indexY = i*nStepY-j+1;
-                yDepth[indexY] = Lake[i].Height - (Lake[i].Height - Lake[i-1].Height) *
+                indexY = (i+1)*nStepY-j+1;
+                yDepth[indexY] = Lake[i].Height - (Lake[i].Height - botH) *
                                     (j-1)/(nStepY);
-                yDepthM[indexY] = Lake[i].Height - (Lake[i].Height - Lake[i-1].Height) *
+                yDepthM[indexY] = Lake[i].Height - (Lake[i].Height - botH) *
                                     ((j-1) + 0.5)/(nStepY);
                 YVOL[indexY] = Lake[i].LayerVol/(nStepY);
                 yTemp[indexY] = Lake[i].Temp;
@@ -1051,31 +1069,8 @@ void inBubble(LOGICAL intopt, int MaxNSy)
             }
         }
 
-        for (i = iLevel; i > 1; i--) {
-            for (j = 1; j < nStepY; j++) {
-                indexY = i*nStepY-j+1;
-                if (i != botmLayer) {
-                    yDepth[indexY] = Lake[i].Height - (Lake[i].Height - Lake[i-1].Height) *
-                                                (j-1)/(nStepY);
-                    yDepthM[indexY] = Lake[i].Height - (Lake[i].Height - Lake[i-1].Height) *
-                                                ((j-1) + 0.5)/(nStepY);
-                } else {
-                    yDepth[indexY] = Lake[i].Height-(Lake[i].Height)*
-                                             (j-1)/(nStepY);
-                    yDepthM[indexY] = Lake[i].Height-(Lake[i].Height)*
-                                             ((j-1) + 0.5)/(nStepY);
-                }
-                YVOL[indexY] = Lake[i].LayerVol/(nStepY);
-                yTemp[indexY] = Lake[i].Temp;
-                ySal[indexY] = Lake[i].Salinity;
-                yDen[indexY] = Lake[i].Density;
-
-                for (ii = 0; ii < Num_WQ_Vars; ii++)
-                    _ywqual(ii, indexY) = _WQ_Vars(ii, i);
-            }
-        }
-
-        level = level * nStepY;
+        //# Plume origin: top sub-layer of the layer containing the diffuser
+        level = (iLevel+1) * nStepY;
 
         for (i = 0; i < MaxNSy; i++) {
             ENT[i] = 0.0;
@@ -1088,21 +1083,24 @@ void inBubble(LOGICAL intopt, int MaxNSy)
         do  {
             if ( !done && inner_loop(iLevel, level, &pCount, &i, NSY, iTop, yDepth, yDepthM, TH, W, B, ENT, yDen) ) {
                 //# Multiply ENT(j) by the number of ports
-                for (j = 0; j < NSY; j++)
+                for (j = 1; j <= NSY; j++)
                     ENT[j] = (nPorts) * ENT[j];
 
                 //# Check if new time step required
                 if (NINT0 < NINT) NINT = NINT0;
 
                 //# Fix entrainments
-                for (i = 0; i < NSY; i++) {
-                    ENT[i] *= (NINT)/1000.0;
+                //# ENT comes back from inner_loop as m3/s per port; convert to a
+                //# volume over the NINT substep.  (DYRESM scaled by 1/1000 here
+                //# because its volumes were in ML; GLM is SI so no such factor.)
+                for (i = 1; i <= NSY; i++) {
+                    ENT[i] *= (NINT);
                     YVOL[i] -= ENT[i];
 
                     if (YVOL[i] <= 0.0) {
                         YVOL[i] += ENT[i];
-                        if (i != NSY-1)
-                            ENT[i+1] += (ENT[i] - 0.9*YVOL[i])*1000./(NINT);
+                        if (i != NSY)   //# push the unmet demand up, back in m3/s
+                            ENT[i+1] += (ENT[i] - 0.9*YVOL[i])/(NINT);
 
                         ENT[i] = 0.9 * YVOL[i];
                         YVOL[i] -= ENT[i];
@@ -1126,7 +1124,7 @@ void inBubble(LOGICAL intopt, int MaxNSy)
                 //# -entrainment
                 QF[i] = 0.0;
 
-                for (j = level; j < iTop[i]; j++) {
+                for (j = level; j <= iTop[i]; j++) {   //# ENT is set up to and including iTop
                     if (ENT[j] > 0.0) {
                         T[i] = combine(T[i], QF[i], PLMDEN[i], yTemp[j], ENT[j], yDen[j]);
                         S[i] = combine(S[i], QF[i], PLMDEN[i],  ySal[j], ENT[j], yDen[j]);
@@ -1154,15 +1152,15 @@ void inBubble(LOGICAL intopt, int MaxNSy)
         //# Volume is only physical property we need change
         for (ii = botmLayer; ii <= surfLayer; ii++) {
             Lake[ii].LayerVol = 0.;
-            for (jj = 0; jj < nStepY; jj++)
-                Lake[ii].LayerVol += YVOL[ii*nStepY-jj+1];
+            for (jj = 1; jj <= nStepY; jj++)
+                Lake[ii].LayerVol += YVOL[ii*nStepY+jj];
 
-            Lake[ii].Temp = yTemp[ii*nStepY];
-            Lake[ii].Salinity = ySal[ii*nStepY];
-            Lake[ii].Density =yDen[ii*nStepY];
+            Lake[ii].Temp = yTemp[(ii+1)*nStepY];
+            Lake[ii].Salinity = ySal[(ii+1)*nStepY];
+            Lake[ii].Density = yDen[(ii+1)*nStepY];
 
             for (jj = 0; jj < Num_WQ_Vars; jj++)
-                _WQ_Vars(jj, ii) = _ywqual(jj, ii*nStepY);
+                _WQ_Vars(jj, ii) = _ywqual(jj, (ii+1)*nStepY);
         }
 
         //# Find the level of intrusion of the water when it falls back
@@ -1175,7 +1173,7 @@ void inBubble(LOGICAL intopt, int MaxNSy)
         //# Make insertion WIDTH 0, then insert will use reservoir width at discha
         QVOLT = 0.0;
 
-        for (i = 0; i < pCount; i++) {
+        for (i = 1; i <= pCount; i++) {   //# plumes are indexed 1..pCount
             for (jj = 0; jj < Num_WQ_Vars; jj++) wqx[jj] = _xw(jj, i);
 
             QVOLT = QVOLT+QF[i];
