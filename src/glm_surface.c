@@ -1144,6 +1144,22 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
 //            memset(sed_vwc, 0, sizeof(AED_REAL)*sed_layers);
 //            memset(sed_temps, 0, sizeof(AED_REAL)*sed_layers);
 
+              //# Volume-weighted zone-average water temperature: the soil model's
+              //# surface boundary condition.  Computed here rather than in the WQ
+              //# coupler because only the legacy 'aed' coupler's copy_to_zone fills
+              //# ztemp; the 'api' coupler and wq_calc=.false. runs would leave it 0.
+              //# Zones with no wet layers keep their previous ztemp.
+              for (z = 0; z < n_zones; z++) {
+                  AED_REAL tsum = 0., tvol = 0.;
+                  for (i = botmLayer; i <= surfLayer; i++) {
+                      if (layer_zone[i] == z) {
+                          tsum += Lake[i].Temp * Lake[i].LayerVol;
+                          tvol += Lake[i].LayerVol;
+                      }
+                  }
+                  if (tvol > 0.) theZones[z].ztemp = tsum / tvol;
+              }
+
               for (z = 0; z < n_zones; z++) {
                   // call the dynamic soil/sediment temperature model
                   /*
