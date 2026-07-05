@@ -377,12 +377,13 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     int             num_outlet     = 0;
     CLOGICAL       *flt_off_sw     = NULL;
     int            *outlet_type    = NULL;
-    int             crit_O2        = -1;
-    int             crit_O2_dep    = -1;
-    int             crit_O2_days   = -1;
+    AED_REAL        crit_val_in    = -1.0;
+    AED_REAL        crit_dep_in    = -1.0;
+    int             crit_days_in   = -1;
+    LOGICAL         crit_above_in  = FALSE;
     AED_REAL       *outlet_crit    = NULL;
-    char          **O2name         = NULL;
-    int             O2idx          = 0;
+    char          **crit_varname   = NULL;
+    int             crit_idx_in    = 0;
     AED_REAL       *target_temp    = NULL;
     AED_REAL        min_lake_temp  = 0.0;
     CLOGICAL        mix_withdraw   = FALSE;
@@ -408,12 +409,13 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "outflow",           TYPE_START,            NULL                  },
           { "num_outlet",        TYPE_INT,              &num_outlet           },
           { "outlet_type",       TYPE_INT|MASK_LIST,    &outlet_type          },
-          { "crit_O2",           TYPE_INT,              &crit_O2              },
-          { "crit_O2_dep",       TYPE_INT,              &crit_O2_dep          },
-          { "crit_O2_days",      TYPE_INT,              &crit_O2_days         },
+          { "crit_val",          TYPE_DOUBLE,           &crit_val_in          },
+          { "crit_dep",          TYPE_DOUBLE,           &crit_dep_in          },
+          { "crit_days",         TYPE_INT,              &crit_days_in         },
+          { "crit_above",        TYPE_BOOL,             &crit_above_in        },
           { "outlet_crit",       TYPE_DOUBLE|MASK_LIST, &outlet_crit          },
-          { "O2name",            TYPE_STR|MASK_LIST,    &O2name               },
-          { "O2idx",             TYPE_INT,              &O2idx                },
+          { "crit_varname",      TYPE_STR|MASK_LIST,    &crit_varname         },
+          { "crit_idx",          TYPE_INT,              &crit_idx_in          },
           { "target_temp",       TYPE_DOUBLE|MASK_LIST, &target_temp          },
           { "min_lake_temp",     TYPE_DOUBLE,           &min_lake_temp        },
           { "fac_range_upper",   TYPE_DOUBLE,           &fac_range_upper      },
@@ -1444,14 +1446,15 @@ for (i = 0; i < n_zones; i++) {
         if (need_free2) free(outlet_type);
     }
     if ( outlet_crit != NULL ) { // only relevant if we have defined it.
-        if ((crit_O2 < 0) || (crit_O2_dep < base_elev) || (crit_O2_days < 1)) {
-            fprintf(stderr, "     ERROR: crit_O2 < 0 or crit_O2_dep < base elevation or crit_O2_days < 1\n");
+        if ((crit_val_in < 0) || (crit_dep_in < base_elev) || (crit_days_in < 1)) {
+            fprintf(stderr, "     ERROR: crit_val < 0 or crit_dep < base elevation or crit_days < 1\n");
             exit(1);
         }
     }
-    O2crit = crit_O2;
-    O2critdep = crit_O2_dep;
-    O2critdays = crit_O2_days;
+    crit_val = crit_val_in;
+    crit_dep = crit_dep_in;
+    crit_days = crit_days_in;
+    CRITabove = crit_above_in;
     MIXwithdraw = mix_withdraw;
     COUPLoxy = coupl_oxy_sw;
     MINlaketemp = min_lake_temp;
@@ -1579,14 +1582,14 @@ for (i = 0; i < n_zones; i++) {
         }
 
         for (j = 0; j < NumOut; j++) {
-            if ( O2name != NULL ) {
-                size_t tl = strlen(O2name[j]);
-                O2idx = wq_var_index_c(O2name[j],&tl);
-                if (O2idx < 0) {
-                    fprintf(stderr, "     wrong oxygen name for outlet %3d ?\n",j+1); // How does it exit???
-                    Outflows[j].O2idx = -1;
+            if ( crit_varname != NULL ) {
+                size_t tl = strlen(crit_varname[j]);
+                crit_idx_in = wq_var_index_c(crit_varname[j],&tl);
+                if (crit_idx_in < 0) {
+                    fprintf(stderr, "     wrong crit_varname for outlet %3d ?\n",j+1);
+                    Outflows[j].crit_idx = -1;
                 } else  {
-                    Outflows[j].O2idx = O2idx;
+                    Outflows[j].crit_idx = crit_idx_in;
                 }
             }
         }

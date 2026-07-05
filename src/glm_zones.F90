@@ -207,7 +207,7 @@ SUBROUTINE copy_to_zone(x_cc, x_diag, wlev)
       ! Ideally this average would be based on volume weighting, rather than count-based
 
       z_cc(1:nvars,1,zon) = z_cc(1:nvars,1,zon) + x_cc(1:nvars,lev)  ! 1:nvars is the water coumn "cc". not benthic
-      z_diag(:,1,zon)     = z_diag(:,1,zon)     + x_diag(:,lev)      !
+      z_diag(:,zon,zon)   = z_diag(:,zon,zon)   + x_diag(:,lev)      ! store at level=zon so cell(zon) is correct with layer_idx=zon
 !     z_diag_hz(:,zon)    = z_diag_hz(:,zon)    + x_diag_hz(:)       !
 
       theZones(zon)%ztemp         = theZones(zon)%ztemp + theLake(lev)%Temp
@@ -226,7 +226,7 @@ SUBROUTINE copy_to_zone(x_cc, x_diag, wlev)
    DO zon=1,a_zones
       ! Finalise zone averaged information (1st layer in each zone structure reserved for zavg)
       z_cc(1:nvars,1,zon) = z_cc(1:nvars,1,zon)/zcount(zon)  ! water column state vars
-      z_diag(:,1,zon)     = z_diag(:,1,zon)/zcount(zon)      ! water column diag vars
+      z_diag(:,zon,zon)   = z_diag(:,zon,zon)/zcount(zon)    ! water column diag vars (level=zon to match layer_idx=zon)
       z_diag_hz(:,zon)    = z_diag_hz(:,zon)/zcount(zon)     ! benthic diag vars
 
       ! Set the water column above a zone, to the respective water layer values
@@ -353,7 +353,7 @@ SUBROUTINE copy_from_zone(n_aed_vars, x_cc, x_diag, x_diag_hz, wlev)
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(lev, j) = z_diag(j, 1, zon) * scale
+                        x_diag(j, lev) = z_diag(j, zon, zon) * scale   ! was (lev,j) — swapped indices; level=zon matches copy_to_zone
                      ENDIF
                   ENDIF
                ENDIF
@@ -373,7 +373,7 @@ SUBROUTINE copy_from_zone(n_aed_vars, x_cc, x_diag, x_diag_hz, wlev)
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(j, lev) = x_diag(j, lev) + (z_diag(j, 1, zon) * (1.0 - scale))
+                        x_diag(j, lev) = x_diag(j, lev) + (z_diag(j, zon, zon) * (1.0 - scale))
                      ENDIF
                   ENDIF
                ENDIF
@@ -393,7 +393,7 @@ SUBROUTINE copy_from_zone(n_aed_vars, x_cc, x_diag, x_diag_hz, wlev)
                   IF ( .NOT.  tvar%sheet ) THEN
                      j = j + 1
                      IF ( tvar%zavg ) THEN
-                        x_diag(j, lev) = z_diag(j, 1, zon)
+                        x_diag(j, lev) = z_diag(j, zon, zon)
                      ENDIF
                   ENDIF
                ENDIF
