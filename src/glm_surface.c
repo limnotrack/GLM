@@ -1138,6 +1138,7 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
             }
             //# Now compute layer-specifc sed heating and increment temperature
             if ( sed_heat_model == 2 ){
+              soil_dt = noSecs;   /* per-step timestep for the dynamic soil solver (s) */
 //            memset(sed_depths, 0, sizeof(AED_REAL)*sed_layers);
 //            memset(sed_vwc, 0, sizeof(AED_REAL)*sed_layers);
 //            memset(sed_temps, 0, sizeof(AED_REAL)*sed_layers);

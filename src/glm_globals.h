@@ -316,6 +316,12 @@ extern int      n_sed_layers;
 extern AED_REAL *sed_layer_depth;
 extern AED_REAL *sed_vwc;
 extern AED_REAL sed_spinup_days;
+// dynamic soil-temperature model thermal properties + per-step dt.
+// These symbols are OWNED by Fortran (glm_types.F90 BIND(C)); here we only extern them.
+extern AED_REAL soil_dt;
+extern AED_REAL sed_k_mineral, sed_k_water, sed_k_air;
+extern AED_REAL sed_c_mineral, sed_c_water, sed_c_air;
+extern AED_REAL sed_bulk_density, sed_mineral_density, sed_porosity, sed_deep_temp;
 
 /*----------------------------------------------------------------------------*/
 // GROUNDWATER

@@ -430,9 +430,35 @@ END SUBROUTINE GInitialTemp
 
 
 !###############################################################################
+SUBROUTINE GInitialTempFV(n,depth,vwc_init,surfTemp,deepTemp,spinup_days,dt,tNew) &
+                                                  BIND(C, name="InitialTempFV")
+!-------------------------------------------------------------------------------
+!# C-callable spin-up for the cell-centred soil-temperature model.  Reads the
+!# soil thermal properties from the (Fortran-owned) glm_types globals and
+!# returns the n interior-cell temperatures in tNew(1:n).
+!-------------------------------------------------------------------------------
+   USE aed_util, ONLY : InitialTempFV, soil_props_t
+!ARGUMENTS
+   INTEGER,intent(in)   :: n
+   AED_REAL,intent(in)  :: depth(0:n+1), vwc_init, surfTemp, deepTemp, spinup_days, dt
+   AED_REAL,intent(out) :: tNew(n)
+!LOCALS
+   TYPE(soil_props_t) :: props
+!-------------------------------------------------------------------------------
+!BEGIN
+   props%k_mineral = sed_k_mineral ; props%k_water = sed_k_water
+   props%c_mineral = sed_c_mineral ; props%c_water = sed_c_water ; props%c_air = sed_c_air
+   props%bulk_density = sed_bulk_density ; props%mineral_density = sed_mineral_density
+   props%porosity = sed_porosity
+   CALL InitialTempFV(n, depth, vwc_init, surfTemp, deepTemp, spinup_days, dt, props, tNew)
+END SUBROUTINE GInitialTempFV
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+!###############################################################################
 SUBROUTINE ZSoilTemp(izone) BIND(C, name="zZSoilTemp")
 !-------------------------------------------------------------------------------
-   USE aed_util, ONLY : SoilTemp
+   USE aed_util, ONLY : SoilTempFV, soil_props_t
 !ARGUMENTS
    !# izone is a C pointer passed BY VALUE from glm_surface.c (ZSoilTemp(&theZones[z]));
    !# it MUST carry the VALUE attribute or Fortran treats it as pass-by-reference and
@@ -441,30 +467,39 @@ SUBROUTINE ZSoilTemp(izone) BIND(C, name="zZSoilTemp")
 !LOCALS
    TYPE(ZoneType),POINTER :: zone
    TYPE(SedLayerType),DIMENSION(:),POINTER :: layers
-   INTEGER :: nsl, kk
-   AED_REAL :: hf
-   AED_REAL,DIMENSION(:),ALLOCATABLE :: sdepth, svwc, stemp
+   INTEGER :: nsl, n, kk
+   AED_REAL :: hf, deepTemp
+   AED_REAL,DIMENSION(:),ALLOCATABLE :: sdepth, cellvwc, cellt
+   TYPE(soil_props_t) :: props
 !-------------------------------------------------------------------------------
 !BEGIN
    CALL C_F_POINTER(izone, zone);
    nsl = zone%n_sed_layers
+   n   = nsl - 2
    CALL C_F_POINTER(zone%c_layers, layers, [nsl]);
-   !# Marshal the (non-contiguous) derived-type component sections into contiguous
-   !# arrays before calling SoilTemp.
-   ALLOCATE(sdepth(nsl), svwc(nsl), stemp(nsl))
+   !# Cell-centred layout: node depths d(0:n+1) = layers(1:nsl)%depth; the n
+   !# interior cells (the prognostic state) live in slots 2..nsl-1; layers(1) is
+   !# the surface boundary node and layers(nsl) the deep boundary node.
+   ALLOCATE(sdepth(0:n+1), cellvwc(n), cellt(n))
    DO kk = 1, nsl
-      sdepth(kk) = layers(kk)%depth
-      svwc(kk)   = layers(kk)%vwc
-      stemp(kk)  = layers(kk)%temp
+      sdepth(kk-1) = layers(kk)%depth
    ENDDO
-   !# n_sed_layers is the total node count N; SoilTemp uses the 0:m+1 convention
-   !# (needs m+2 = N slots), so the interior node count passed is m = N-2.
-   CALL SoilTemp(nsl - 2, sdepth, svwc, zone%ztemp, stemp, hf)
+   DO kk = 1, n
+      cellvwc(kk) = layers(kk+1)%vwc
+      cellt(kk)   = layers(kk+1)%temp
+   ENDDO
+   deepTemp = layers(nsl)%temp
+   props%k_mineral = sed_k_mineral ; props%k_water = sed_k_water
+   props%c_mineral = sed_c_mineral ; props%c_water = sed_c_water ; props%c_air = sed_c_air
+   props%bulk_density = sed_bulk_density ; props%mineral_density = sed_mineral_density
+   props%porosity = sed_porosity
+   CALL SoilTempFV(n, sdepth, cellvwc, zone%ztemp, deepTemp, soil_dt, props, cellt, hf)
    zone%heatflux = hf
-   DO kk = 1, nsl
-      layers(kk)%temp = stemp(kk)
+   DO kk = 1, n
+      layers(kk+1)%temp = cellt(kk)
    ENDDO
-   DEALLOCATE(sdepth, svwc, stemp)
+   layers(1)%temp = zone%ztemp
+   DEALLOCATE(sdepth, cellvwc, cellt)
 END SUBROUTINE ZSoilTemp
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

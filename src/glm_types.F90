@@ -254,6 +254,22 @@ MODULE glm_types
    TYPE(FLOGICAL),BIND(C, name="do_particle_bgc")    :: do_particle_bgc = .FALSE.
    TYPE(FLOGICAL),BIND(C, name="link_ext_par")       :: link_ext_par = .FALSE.
 
+   !# Dynamic sediment soil-temperature model (sed_heat_model = 2): the per-step
+   !# timestep (set from noSecs by glm_surface.c) and the soil thermal properties
+   !# (mirror intertidal-soil SoilParams; optional &sediment overrides).
+   !# Fortran owns these symbols; the C side extern's them (glm_globals.h).
+   TYPE(AED_REAL),TARGET,BIND(C, name="soil_dt")             :: soil_dt = 3600.
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_k_mineral")       :: sed_k_mineral = 2.5
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_k_water")         :: sed_k_water = 0.57
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_k_air")           :: sed_k_air = 0.025
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_c_mineral")       :: sed_c_mineral = 2.0e6
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_c_water")         :: sed_c_water = 4.18e6
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_c_air")           :: sed_c_air = 1.25e3
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_bulk_density")    :: sed_bulk_density = 1.5
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_mineral_density") :: sed_mineral_density = 2.6
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_porosity")        :: sed_porosity = -1.0
+   TYPE(AED_REAL),TARGET,BIND(C, name="sed_deep_temp")       :: sed_deep_temp = -9999.0
+
 CONTAINS
 
 !#

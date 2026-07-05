@@ -564,6 +564,11 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
     extern AED_REAL *sed_layer_depth;
     extern AED_REAL *sed_vwc;
     extern AED_REAL  sed_spinup_days;
+    //#   dynamic soil-model thermal properties (optional; Fortran-owned globals)
+    extern AED_REAL  soil_dt;
+    extern AED_REAL  sed_k_mineral, sed_k_water, sed_k_air;
+    extern AED_REAL  sed_c_mineral, sed_c_water, sed_c_air;
+    extern AED_REAL  sed_bulk_density, sed_mineral_density, sed_porosity, sed_deep_temp;
     //==========================================================================
     NAMELIST sediment[] = {
           { "sediment",          TYPE_START,            NULL                  },
@@ -592,6 +597,17 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
           { "sed_layer_depth",   TYPE_DOUBLE|MASK_LIST, &sed_layer_depth      },
           { "sed_vwc",           TYPE_DOUBLE|MASK_LIST, &sed_vwc              },
           { "sed_spinup_days",   TYPE_DOUBLE,           &sed_spinup_days      },
+          //#     soil thermal properties (optional; defaults mirror intertidal-soil)
+          { "sed_k_mineral",     TYPE_DOUBLE,           &sed_k_mineral        },
+          { "sed_k_water",       TYPE_DOUBLE,           &sed_k_water          },
+          { "sed_k_air",         TYPE_DOUBLE,           &sed_k_air            },
+          { "sed_c_mineral",     TYPE_DOUBLE,           &sed_c_mineral        },
+          { "sed_c_water",       TYPE_DOUBLE,           &sed_c_water          },
+          { "sed_c_air",         TYPE_DOUBLE,           &sed_c_air            },
+          { "sed_bulk_density",  TYPE_DOUBLE,           &sed_bulk_density     },
+          { "sed_mineral_density",TYPE_DOUBLE,          &sed_mineral_density  },
+          { "sed_porosity",      TYPE_DOUBLE,           &sed_porosity         },
+          { "sed_deep_temp",     TYPE_DOUBLE,           &sed_deep_temp        },
           { NULL,                TYPE_END,              NULL                  }
     };
     /*-- %%END NAMELIST ------------------------------------------------------*/
@@ -1155,12 +1171,32 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
                 exit(1);
             }
             sed_layer_depth = malloc(n_sed_layers * sizeof(AED_REAL));
-            AED_REAL r = 1.6, denom = pow(r, n_sed_layers - 1) - 1.0;
-            for (k = 0; k < n_sed_layers; k++)
-                sed_layer_depth[k] = sed_temp_depth * (pow((double)r, (double)k) - 1.0) / denom;
+            /* Match the Python intertidal-soil grid (intertidal_soil/soil_params.py
+             * _default_layer_depths): fixed dz0 = 5 mm surface cell, growth ratio
+             * solved by bisection so the n interior cells span [0.001, sed_temp_depth];
+             * n_sed_layers = n + 2 total nodes (0 = surface, n+1 = deep boundary). */
+            {
+                int      n   = n_sed_layers - 2;          /* Python n (interior cells) */
+                AED_REAL dz0 = 0.005, target = sed_temp_depth - 0.001;
+                if ( target <= dz0 * n ) {                /* too shallow: uniform grid */
+                    for (k = 0; k < n_sed_layers; k++)
+                        sed_layer_depth[k] = sed_temp_depth * k / (double)(n_sed_layers - 1);
+                } else {
+                    AED_REAL lo = 1.0 + 1e-9, hi = 10.0, r = 1.5;
+                    int it;
+                    for (it = 0; it < 100; it++) {        /* solve dz0*(r^n-1)/(r-1) = target */
+                        r = 0.5 * (lo + hi);
+                        if ( dz0 * (pow(r, n) - 1.0) / (r - 1.0) > target ) hi = r; else lo = r;
+                    }
+                    sed_layer_depth[0] = 0.0;
+                    sed_layer_depth[1] = 0.001;
+                    for (k = 1; k <= n; k++)
+                        sed_layer_depth[k+1] = sed_layer_depth[k] + dz0 * pow(r, k - 1);
+                }
+            }
             if (quiet < 2)
-                fprintf(stderr, "     sed_heat_model = 2: auto soil grid, %d nodes over %.3f m "
-                        "(sed_temp_depth)\n", n_sed_layers, sed_temp_depth);
+                fprintf(stderr, "     sed_heat_model = 2: auto soil grid (5mm surface cell), "
+                        "%d nodes over %.3f m\n", n_sed_layers, sed_temp_depth);
         } else if ( get_nml_listlen(namlst, "sediment", "sed_layer_depth") < n_sed_layers ) {
             fprintf(stderr, "     ERROR: sed_layer_depth list shorter than n_sed_layers (%d)\n", n_sed_layers);
             exit(1);
@@ -1170,6 +1206,9 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
             fprintf(stderr, "     ERROR: sed_vwc must have 1 or n_sed_layers (%d) entries\n", n_sed_layers);
             exit(1);
         }
+        /* Resolve porosity (Python: 1 - bulk/mineral density) if left unset. */
+        if ( sed_porosity < 0.0 )
+            sed_porosity = 1.0 - sed_bulk_density / sed_mineral_density;
 
         for (i = 0; i < n_zones; i++) {
             theZones[i].n_sed_layers = n_sed_layers;
@@ -1180,21 +1219,25 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
                     (sed_vwc == NULL) ? 0.4 : (vwc_len == 1 ? sed_vwc[0] : sed_vwc[k]);
             }
 #if !USE_DL_LOADER
-            /* Spin up the profile toward quasi-equilibrium before the run.
-             * NOTE: InitialTemp (libaed-water, upstream) hard-codes its surface
-             * boundary to ~5 degC during the spin-up iterations and ignores the
-             * passed topTemp -- an upstream quirk, not a bug introduced here. */
+            /* Spin up the cell-centred soil profile to quasi-equilibrium
+             * (faithful port of intertidal-soil initial_temp).  Slot layout:
+             *   layers[0]          = surface boundary node (Dirichlet = ztemp)
+             *   layers[1..nsl-2]   = the n interior cells (the prognostic state)
+             *   layers[nsl-1]      = deep boundary node (Dirichlet = deepT). */
             {
-                int      m       = n_sed_layers - 2;
-                AED_REAL wv      = (sed_vwc == NULL) ? 0.4 : sed_vwc[0];
-                AED_REAL botTemp = (sed_temp_mean != NULL) ? sed_temp_mean[i] : 10.0;
-                AED_REAL topTemp = botTemp;
-                AED_REAL *tNew   = calloc(n_sed_layers, sizeof(AED_REAL));
-                InitialTemp(&m, sed_layer_depth, &wv, &topTemp, &botTemp,
-                            &sed_spinup_days, tNew);
-                for (k = 0; k < n_sed_layers; k++)
-                    theZones[i].layers[k].temp = tNew[k];
-                free(tNew);
+                int      n       = n_sed_layers - 2;
+                AED_REAL vwc0    = (sed_vwc == NULL) ? 0.4 : sed_vwc[0];
+                AED_REAL surfT   = (sed_temp_mean != NULL) ? sed_temp_mean[i] : 10.0;
+                AED_REAL deepT   = (sed_deep_temp > -9000.0) ? sed_deep_temp : surfT;
+                AED_REAL spin_dt = 900.0;        /* spin-up dt (s); Python default */
+                AED_REAL *cellT  = calloc(n, sizeof(AED_REAL));
+                InitialTempFV(&n, sed_layer_depth, &vwc0, &surfT, &deepT,
+                              &sed_spinup_days, &spin_dt, cellT);
+                theZones[i].layers[0].temp              = surfT;
+                for (k = 0; k < n; k++)
+                    theZones[i].layers[k+1].temp        = cellT[k];
+                theZones[i].layers[n_sed_layers-1].temp = deepT;
+                free(cellT);
             }
 #endif
         }
