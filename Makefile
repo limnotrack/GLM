@@ -266,7 +266,7 @@ else ifeq ($(F90),ifx)
     FLIBS+=-lifcore -lsvml -lifport
     FLIBS+=-limf -lintlc -liomp5 -lifport
   endif
-else ifeq ($(F90),flang-new)
+else ifeq ($(F90),flang)
   LINK=$(FC)
   DEBUG_FFLAGS=-g -DDEBUG=1
   OPT_FFLAGS=-O3
