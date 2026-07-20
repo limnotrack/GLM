@@ -1,4 +1,4 @@
-name: Build GLM (Windows)
+name: Build GLM
 
 # Manually triggered so you can pick which GLM branch/tag to build.
 on:
@@ -10,7 +10,7 @@ on:
         default: 'v4alpha'
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     defaults:
       run:
@@ -193,3 +193,167 @@ jobs:
         with:
           name: glm-windows-${{ inputs.glm_ref }}
           path: glm_dist
+
+  # ==========================================================================
+  # Linux and macOS don't use the ancillary/ from-source pipeline at all -
+  # build_glm.sh only invokes it on Msys (Windows). On these platforms the
+  # netcdf-c/netcdf-fortran/gd dependencies come from the system package
+  # manager instead, which is also how this project ships its own .deb
+  # package (see debian/control) and documents macOS builds (README.Macintosh).
+  #
+  # build_env.inc (staged below, same as Windows) auto-detects whether those
+  # packages are actually found (via nc-config/nf-config/gd.h) and only
+  # falls back to building from ancillary/ if something's missing - so we
+  # stage ancillary/ here too, purely as a safety net, not because it's
+  # expected to run.
+  # ==========================================================================
+
+  build-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      ROOT: ${{ github.workspace }}
+
+    steps:
+      - name: Install build dependencies (apt)
+        run: |
+          sudo apt-get update
+          # libx11-dev is only needed for --xdisp (the interactive plot
+          # window); drop it (and WITH_XPLOTS below) if you don't need that.
+          sudo apt-get install -y gfortran gcc make git \
+            libnetcdf-dev libnetcdff-dev libgd-dev libx11-dev
+
+      - name: Checkout GLM
+        uses: actions/checkout@v4
+        with:
+          repository: AquaticEcoDynamics/GLM
+          ref: ${{ inputs.glm_ref }}
+          path: GLM
+
+      - name: Checkout AED_Tools and sibling libraries
+        run: |
+          cd "$ROOT"
+          for repo in AED_Tools libaed-water libaed-benthic libaed-demo libaed-api libutil libplot; do
+            git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
+          done
+
+      - name: Stage build_env.inc, build_aedlibs.inc and ancillary/ (fallback only)
+        run: |
+          cd "$ROOT"
+          cp AED_Tools/build_env.inc .
+          cp AED_Tools/build_aedlibs.inc .
+          cp -r AED_Tools/ancillary .
+
+      - name: Build GLM
+        run: |
+          cd "$ROOT/GLM"
+          ./build_glm.sh
+
+      - name: Verify glm runs
+        run: |
+          cd "$ROOT/GLM"
+          ./glm --version
+
+      - name: Assemble distributable folder
+        run: |
+          mkdir -p "$ROOT/glm_dist"
+          cp "$ROOT/GLM/glm" "$ROOT/glm_dist/"
+          # This binary is dynamically linked against apt's shared libs, so
+          # unlike the Windows build it's only guaranteed to run on a
+          # matching distro/version - not a portable bundle. Record what it
+          # actually needs at runtime for reference.
+          ldd "$ROOT/GLM/glm" > "$ROOT/glm_dist/ldd-dependencies.txt" || true
+
+      - name: Upload glm_dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: glm-linux-${{ inputs.glm_ref }}
+          path: glm_dist
+
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      ROOT: ${{ github.workspace }}
+
+    steps:
+      - name: Install build dependencies (Homebrew)
+        run: |
+          brew install gcc netcdf netcdf-fortran gd
+
+      - name: Resolve versioned FC/CC and put them on PATH
+        run: |
+          # Homebrew's gcc formula installs versioned binaries (gfortran-14,
+          # gcc-14, ...), not a plain "gfortran"/"gcc" - resolve whatever
+          # version actually got installed instead of hardcoding one.
+          GCC_VER=$(brew list --versions gcc | awk '{print $2}' | cut -d. -f1)
+          echo "FC=gfortran-${GCC_VER}" >> "$GITHUB_ENV"
+          echo "CC=gcc-${GCC_VER}" >> "$GITHUB_ENV"
+          echo "HOMEBREW=true" >> "$GITHUB_ENV"
+
+      - name: Checkout GLM
+        uses: actions/checkout@v4
+        with:
+          repository: AquaticEcoDynamics/GLM
+          ref: ${{ inputs.glm_ref }}
+          path: GLM
+
+      - name: Checkout AED_Tools and sibling libraries
+        run: |
+          cd "$ROOT"
+          for repo in AED_Tools libaed-water libaed-benthic libaed-demo libaed-api libutil libplot; do
+            git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
+          done
+
+      - name: Stage build_env.inc, build_aedlibs.inc and ancillary/ (fallback only)
+        run: |
+          cd "$ROOT"
+          cp AED_Tools/build_env.inc .
+          cp AED_Tools/build_aedlibs.inc .
+          cp -r AED_Tools/ancillary .
+
+      # build_env.inc's gd detection only checks the literal path
+      # /usr/include/gd.h, which Homebrew never installs to (it uses
+      # /opt/homebrew or /usr/local). Left as-is, that makes it fall back to
+      # building gd from source via ancillary/ every run, which is slow and
+      # untested on macOS. Pointing HOMEBREW's gd.h at the path it checks
+      # avoids that - if /usr/include isn't writable on the runner, this
+      # step is harmless to skip; build_glm.sh will just fall back to
+      # ancillary/ instead.
+      - name: "Workaround: make Homebrew's gd.h visible to build_env.inc's detection"
+        run: |
+          GD_INCLUDE="$(brew --prefix gd)/include/gd.h"
+          sudo mkdir -p /usr/include 2>/dev/null || true
+          sudo cp "$GD_INCLUDE" /usr/include/gd.h 2>/dev/null || \
+            echo "could not stage /usr/include/gd.h - build_glm.sh will build gd from source via ancillary/ instead"
+
+      - name: Build GLM
+        run: |
+          cd "$ROOT/GLM"
+          ./build_glm.sh
+
+      - name: Verify glm runs
+        run: |
+          cd "$ROOT/GLM"
+          ./glm --version
+
+      - name: Assemble distributable folder
+        run: |
+          mkdir -p "$ROOT/glm_dist"
+          cp "$ROOT/GLM/glm" "$ROOT/glm_dist/"
+          # Dynamically linked against Homebrew's dylibs - portable to other
+          # Macs only if they also have the same Homebrew packages installed
+          # (or use the project's own macos/macpkg.sh to bundle them, which
+          # this job doesn't do yet).
+          otool -L "$ROOT/GLM/glm" > "$ROOT/glm_dist/otool-dependencies.txt" || true
+
+      - name: Upload glm_dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: glm-macos-${{ inputs.glm_ref }}
+          path: glm_dist
+          
