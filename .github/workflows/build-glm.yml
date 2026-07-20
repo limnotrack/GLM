@@ -228,7 +228,7 @@ jobs:
       - name: Checkout GLM
         uses: actions/checkout@v4
         with:
-          repository: AquaticEcoDynamics/GLM
+          repository: limnotrack/GLM
           ref: ${{ inputs.glm_ref }}
           path: GLM
 
@@ -298,7 +298,7 @@ jobs:
       - name: Checkout GLM
         uses: actions/checkout@v4
         with:
-          repository: AquaticEcoDynamics/GLM
+          repository: limnotrack/GLM
           ref: ${{ inputs.glm_ref }}
           path: GLM
 
