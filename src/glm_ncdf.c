@@ -318,7 +318,7 @@ void write_glm_ncdf(int ncid, int wlev, int nlev, int stepnum, AED_REAL timestep
     AED_REAL temp_time, LakeVolume;
     AED_REAL *heights, *vols, *area, *salts, *temps, *dens, *qsw, *extc_coef;
     AED_REAL *u_mean, *u_orb, *taub, *epsilon;
-    int i, littoralLayer = 0, iret = NC_NOERR;
+    int i, littoralLayer = 0;
 
     if (ncid == -1) return;
 

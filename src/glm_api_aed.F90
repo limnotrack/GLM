@@ -150,10 +150,6 @@ MODULE glm_api_aed
 
    AED_REAL,DIMENSION(:),ALLOCATABLE,TARGET :: feedback
 
-!  CHARACTER(len=48),ALLOCATABLE :: names(:)
-!  CHARACTER(len=48),ALLOCATABLE :: bennames(:)
-!  CHARACTER(len=48),ALLOCATABLE :: diagnames(:)
-
    INTEGER,DIMENSION(:),ALLOCATABLE :: externalid
    INTEGER,DIMENSION(:),ALLOCATABLE :: zexternalid
    INTEGER,DIMENSION(:),ALLOCATABLE :: plot_id_v, plot_id_sv, plot_id_d, plot_id_sd
@@ -381,14 +377,14 @@ SUBROUTINE api_set_glm_env()
    env(1)%sed_zone      => sed_zones(1)
    env(1)%mat_id        => matz
 
-   env(1)%bathy         =>  feedback(1) !bathy(1)
+   env(1)%bathy         => feedback(1) !bathy(1)
 !  env(1)%datum         =>  ...
 
-   env(1)%biodrag       =>  feedback !bio_drag
-   env(1)%bioextc       =>  feedback
-   env(1)%solarshade    =>  feedback(1)
-   env(1)%windshade     =>  feedback(1)
-   env(1)%rainloss      =>  feedback(1) !rainloss(1)
+   env(1)%biodrag       => feedback !bio_drag
+   env(1)%bioextc       => feedback
+   env(1)%solarshade    => feedback(1)
+   env(1)%windshade     => feedback(1)
+   env(1)%rainloss      => feedback(1) !rainloss(1)
 
    CALL aed_set_model_env(env, 1, MaxLayers)
 

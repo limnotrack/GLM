@@ -497,7 +497,7 @@ AED_REAL random_walk(AED_REAL dt, AED_REAL Height, AED_REAL K_z, AED_REAL K_prim
     updated_height = Height + K_prime_z * Height * del_t + random_float *
     sqrt((2 * K_z * (Height + 0.5 * K_prime_z * Height * del_t) * del_t) / (1.0/3)); // random walk
 
-    updated_height = updated_height + vvel * del_t;   // account for sinking/floating; 
+    updated_height = updated_height + vvel * del_t;   // account for sinking/floating;
                                                       // vvel is per second so needs to
                                                       // be multiplied by del_t which
                                                       // is number of seconds of random

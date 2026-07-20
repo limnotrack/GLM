@@ -66,15 +66,15 @@ ifeq ($(WITH_CHECKS),)
 endif
 
 srcdir=src
-#incdir=include
 incdir=src
 objdir=obj
 moddir=mod
+libdir=lib
 
 TARGETS=glm libglm.${so_ext}
 DEFINES=
-FINCLUDES=-I${incdir} -I$(UTILDIR)/include
-CINCLUDES=-I${incdir} -I$(UTILDIR)/include
+FINCLUDES+=-I$(UTILDIR)/include
+CINCLUDES+=-I$(UTILDIR)/include -I../ancillary/include
 LIBS=-L$(UTILDIR)/lib -lutil
 GLM_DEPS=$(UTILDIR)/lib/libutil.a
 ifeq ($(WITH_PLOTS),true)
@@ -102,12 +102,12 @@ ifeq ($(OSTYPE),Darwin)
   so_ext=dylib
 else ifeq ($(OSTYPE),Msys)
   ifeq ("$(wildcard '../ancillary/windows')", "")
-    CINCLUDES+=-I../ancillary/include
     LIBS+=-L../ancillary/lib
   else
     CINCLUDES+=-I../ancillary/windows/include
     LIBS+=-L../ancillary/windows/lib
   endif
+  so_ext=dll
 else ifeq ($(OSTYPE),FreeBSD)
   FINCLUDES+=-I/usr/local/flang/include -I/usr/local/include
   CINCLUDES+=-I/usr/local/include
@@ -115,6 +115,7 @@ else ifeq ($(OSTYPE),FreeBSD)
   ifeq ($(MDEBUG),true)
     DBG_LIBS=-fsanitize=address -static-libsan
   endif
+  so_ext=so
 else
   CINCLUDES+=-I/usr/local/include
   EXTRALINKFLAGS=-Wl,-z,relro,--export-dynamic
@@ -266,17 +267,15 @@ else ifeq ($(F90),ifx)
     FLIBS+=-limf -lintlc -liomp5 -lifport
   endif
 else ifeq ($(F90),flang)
-  LINK=$(CC)
+  LINK=$(FC)
   DEBUG_FFLAGS=-g -DDEBUG=1
   OPT_FFLAGS=-O3
-  FFLAGS=-module ${moddir} $(DEFINES) $(FINCLUDES)
+  FFLAGS=-module-dir ${moddir} $(DEFINES) $(FINCLUDES)
   ifeq ($(WITH_CHECKS),true)
     FFLAGS+=-Mbounds
   endif
-  FFLAGS+=-r8
-  FLIBS+=-L/usr/local/flang/lib
-  FLIBS+=-lexecinfo -lpgmath -lomp
-  FLIBS+=-lflang -lflangrti -lflangADT -lflangArgParser
+  FFLAGS+=-fdefault-real-8 -fdefault-double-8
+  FLIBS+=-L../ancillary/lib
 else
   LINK=$(FC)
   DEBUG_FFLAGS=-g -fbacktrace -DDEBUG=1
@@ -289,13 +288,6 @@ else
   OMPFLAG=-fopenmp
   FLIBS+=-lgfortran -lgomp
  #EXTFFLAGS+=-Wno-unused-dummy-argument -Wno-unused-value
-endif
-
-ifeq ($(F90),ifx)
-  ifneq ($(OSTYPE),Msys)
-    #FFLAGS+=-fPIC
-    FFLAGS+=-fPIE
-  endif
 endif
 
 ifneq ($(USE_DL),true)
@@ -364,7 +356,9 @@ ifeq ($(MDEBUG),true)
 endif
 
 CFLAGS=-Wall -I$(UTILDIR) -I$(PLOTDIR) $(CINCLUDES) $(DEFINES) $(DEBUG_CFLAGS) $(OPT_CFLAGS)
+CFLAGS+=-fPIC
 FFLAGS+=$(DEBUG_FFLAGS) $(OPT_FFLAGS)
+FFLAGS+=-fPIC
 
 OBJS=${objdir}/glm_globals.o \
      ${objdir}/glm_util.o \
@@ -393,10 +387,11 @@ OBJS=${objdir}/glm_globals.o \
      ${objdir}/glm_debug.o \
      ${objdir}/glm_balance.o \
      ${objdir}/glm_heatexchange.o \
-     ${objdir}/glm_oxygenation.o \
-     ${objdir}/glm_main.o
+     ${objdir}/glm_oxygenation.o
 
-LIBOBJS=$(filter-out ${objdir}/glm_main.o,$(OBJS)) ${objdir}/glm_lib.o
+GLMOBJS=${objdir}/glm_main.o
+
+LIBOBJS=${objdir}/glm_lib.o
 
 ifeq ($(USE_DL),true)
   LIBS+=-ldl
@@ -419,8 +414,8 @@ endif
 
 all: $(TARGETS)
 
-lib:
-	@mkdir lib
+${libdir}:
+	@mkdir ${libdir}
 
 ${objdir}:
 	@mkdir ${objdir}
@@ -428,19 +423,19 @@ ${objdir}:
 ${moddir}:
 	@mkdir ${moddir}
 
-glm: ${objdir} ${moddir} $(OBJS) $(GLM_DEPS) $(RES)
-	$(LINK) -o $@ $(EXTRALINKFLAGS) $(OBJS) $(RES) $(WQLIBS) $(LIBS) $(FLIBS)
+glm: ${objdir} ${moddir} $(OBJS) $(GLMOBJS) $(GLM_DEPS) $(RES)
+	$(LINK) -o $@ $(EXTRALINKFLAGS) $(OBJS) $(GLMOBJS) $(RES) $(WQLIBS) $(LIBS) $(FLIBS)
 
-glm+: ${objdir} ${moddir} $(OBJS) $(GLM_DEPS) $(RESP)
-	$(LINK) -o $@ $(EXTRALINKFLAGS) $(OBJS) $(RESP) $(WQLIBS) $(LIBS) $(FLIBS)
+glm+: ${objdir} ${moddir} $(OBJS) $(GLMOBJS) $(GLM_DEPS) $(RESP)
+	$(LINK) -o $@ $(EXTRALINKFLAGS) $(OBJS) $(GLMOBJS) $(RESP) $(WQLIBS) $(LIBS) $(FLIBS)
 
 # Shared library for Python/ctypes (libglm.so or libglm.dylib)
 # Build after: make glm (or glm+). Requires AED libs. Use: make libglm.so WITH_PLOTS=false
-libglm.${so_ext}: ${objdir} ${moddir} $(LIBOBJS) $(GLM_DEPS)
-	$(FC) -shared -Wl,--no-undefined -o $@ $(LIBOBJS) $(RES) $(WQLIBS) $(LIBS) $(FLIBS)
+libglm.${so_ext}: ${objdir} ${moddir} $(OBJS) $(LIBOBJS) $(GLM_DEPS)
+	$(FC) -shared -Wl,--no-undefined -o $@ $(OBJS) $(LIBOBJS) $(RES) $(WQLIBS) $(LIBS) $(FLIBS)
 
-${objdir}/glm_lib.o: ${srcdir}/glm_lib.c ${incdir}/glm.h
-	$(CC) -fPIC $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
+libglm+.${so_ext}: ${objdir} ${moddir} $(OBJS) $(LIBOBJS) $(GLM_DEPS)
+	$(FC) -shared -Wl,--no-undefined -o $@ $(OBJS) $(LIBOBJS) $(RESP) $(WQLIBS) $(LIBS) $(FLIBS)
 
 clean: ${objdir} ${moddir}
 	@touch ${objdir}/1.o ${moddir}/1.mod 1.t 1__genmod.f90 glm 1.${so_ext} glm_test_bird macos/glm.app macos/glm+.app
@@ -457,8 +452,11 @@ clean: ${objdir} ${moddir}
 distclean: clean
 	@/bin/rm -rf ${objdir} ${moddir} glm glm+ libglm.${so_ext} macos/glm.app macos/glm+.app
 
+${objdir}/%.o: ${srcdir}/%.c ${incdir}/glm.h
+	$(CC) $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
+
 ${objdir}/%.o: ${srcdir}/%.F90 ${incdir}/glm.h
-	$(FC) -fPIC $(FFLAGS) $(EXTFFLAGS) -c $< -o $@
+	$(FC) $(FFLAGS) $(EXTFFLAGS) -c $< -o $@
 
 ${objdir}/glm_main.o: ${srcdir}/glm_main.c ${incdir}/glm.h
 	$(CC) -DBUILDDATE=\"${BUILDDATE}\" $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
@@ -468,9 +466,6 @@ ${objdir}/glm_rc.o: win/glm.rc
 
 ${objdir}/glm+_rc.o: win/glm+.rc
 	windres $< -o $@
-
-${objdir}/%.o: ${srcdir}/%.c ${incdir}/glm.h
-	$(CC) -fPIC $(CFLAGS) $(EXTRA_FLAGS) -c $< -o $@
 
 %.${so_ext}:
 	$(LD) ${SHARED} $(LDFLAGS) \
