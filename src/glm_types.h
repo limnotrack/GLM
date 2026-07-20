@@ -39,8 +39,8 @@
  ************************* Important Note *************************************/
 
 #define MaxPar        37
-#define MaxOut        10000     /* Maximum number of outflows */
-#define MaxInf        10000     /* Maximum number of inflows */
+#define MaxOut        10000  /* Maximum number of outflows */
+#define MaxInf        10000  /* Maximum number of inflows */
 #define MaxVars       60     /* Maximum number of variables */
 #define MaxDif   (MaxVars+2) /* Maximum number of diffusing substances */
 #define NPart         10000  /* Maximum number of particles */
