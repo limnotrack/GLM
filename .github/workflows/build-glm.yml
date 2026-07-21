@@ -141,21 +141,6 @@ jobs:
           cp AED_Tools/build_aedlibs.inc .
           cp -r AED_Tools/ancillary .
 
-      # (a) build_glm.sh checks for "ancillary/windows/lib" and cd's into
-      #     "ancillary/windows", but the ancillary/ pipeline above produces
-      #     a flat ancillary/lib, ancillary/include, ancillary/bin layout
-      #     with no "windows" subfolder. Point it at the right path. This
-      #     runs every time (GLM itself isn't cached, unlike ancillary/).
-      #     Windows-only: it's a no-op elsewhere since build_glm.sh only
-      #     invokes the ancillary/ pipeline on Msys in the first place.
-      - name: "Patch: build_glm.sh ancillary path (Windows only)"
-        if: matrix.os == 'windows-latest'
-        run: |
-          sed -i \
-            -e 's#ancillary/windows/lib#ancillary/lib#' \
-            -e 's#cd ancillary/windows#cd ancillary#' \
-            "$ROOT/GLM/build_glm.sh"
-
       # ------------------------------------------------------------------
       # 4. Build the ancillary C/Fortran dependency chain: zlib, libaec,
       #    curl, hdf5, netcdf-c, netcdf-fortran, jpeg, libpng, freetype,
@@ -178,7 +163,7 @@ jobs:
           # patches below, or if ancillary/sources/versions.inc changes.
           key: glm-ancillary-windows-v1-${{ hashFiles('ancillary/sources/versions.inc') }}
 
-      # (b) HDF5 1.14.x's _Float16 conversion code references FLT16_MAX,
+      # (a) HDF5 1.14.x's _Float16 conversion code references FLT16_MAX,
       #     which mingw-w64's headers don't define for this GCC version
       #     (GCC does provide the value via the builtin __FLT16_MAX__).
       - name: "Patch: HDF5 FLT16_MAX gap (Windows only)"
@@ -188,7 +173,7 @@ jobs:
             's#-DCMAKE_C_FLAGS="-I${FINALDIR}/include"#-DCMAKE_C_FLAGS="-I${FINALDIR}/include -DFLT16_MAX=__FLT16_MAX__"#' \
             "$ROOT/ancillary/sources/scripts/build_extras.inc"
 
-      # (c) The DKRZ gitlab mirror for libaec is prone to rate-limiting
+      # (b) The DKRZ gitlab mirror for libaec is prone to rate-limiting
       #     anonymous/CI IPs (HTTP 429). Pre-fetch it from the GitHub
       #     mirror instead and repackage it under the archive name/top
       #     level directory name (libaec-v1.1.4) that build_extras.inc
