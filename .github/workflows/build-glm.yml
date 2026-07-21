@@ -59,7 +59,22 @@ jobs:
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
-          for repo in AED_Tools libaed-water libaed2 libaed-benthic libaed-demo libaed-api libutil libplot; do
+          # libaed-api and libaed2 are mutually exclusive, branch-specific
+          # dependencies, not universal ones:
+          #  - v4alpha has a WITH_API/libaed-api plugin feature; AED2 doesn't
+          #    exist there at all (no Makefile support, no build_glm.sh flag).
+          #  - master needs libaed2 (its GLM_CONFIG sets AED2=true by
+          #    default, and build_glm.sh unconditionally cd's into it when
+          #    that's set); it has no WITH_API/libaed-api concept.
+          # Cloning the wrong one is just wasted time; cloning neither is a
+          # hard build failure. Add more branches here as needed.
+          SIBLINGS="AED_Tools libaed-water libaed-benthic libaed-demo libutil libplot"
+          if [ "${{ inputs.glm_ref }}" = "v4alpha" ]; then
+            SIBLINGS="$SIBLINGS libaed-api"
+          else
+            SIBLINGS="$SIBLINGS libaed2"
+          fi
+          for repo in $SIBLINGS; do
             git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
           done
 
@@ -125,9 +140,19 @@ jobs:
       - name: "Patch: netcdf-c/netcdf-fortran strict pointer-type errors"
         if: steps.ancillary-cache.outputs.cache-hit != 'true'
         run: |
+          # (sed's /pattern/a\text form breaks here: a backslash sitting right
+          # against the closing delimiter - both in the address and in a
+          # trailing continuation backslash in the appended text - gets
+          # parsed as escaping the delimiter/newline instead of being taken
+          # literally, so sed either errors ("unterminated address regex") or
+          # silently drops the line's trailing "\", corrupting the multi-line
+          # cmake command it's inserted into. awk has no such delimiter to
+          # collide with, so it's used here instead.)
           for f in "$ROOT/ancillary/sources/scripts/build_netcdf_c.inc" \
                    "$ROOT/ancillary/sources/scripts/build_netcdf_f.inc"; do
-            sed -i '/-DCMAKE_BUILD_TYPE:STRING=Release \\/a\           -DCMAKE_C_FLAGS:STRING=-fpermissive \\' "$f"
+            awk '{print} /-DCMAKE_BUILD_TYPE:STRING=Release/{print "           -DCMAKE_C_FLAGS:STRING=-fpermissive \\"}' \
+              "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            grep -q -- '-fpermissive' "$f" || { echo "::error::netcdf patch did not apply to $f"; exit 1; }
           done
 
       # (d) The DKRZ gitlab mirror for libaec is prone to rate-limiting
@@ -235,7 +260,22 @@ jobs:
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
-          for repo in AED_Tools libaed-water libaed2 libaed-benthic libaed-demo libaed-api libutil libplot; do
+          # libaed-api and libaed2 are mutually exclusive, branch-specific
+          # dependencies, not universal ones:
+          #  - v4alpha has a WITH_API/libaed-api plugin feature; AED2 doesn't
+          #    exist there at all (no Makefile support, no build_glm.sh flag).
+          #  - master needs libaed2 (its GLM_CONFIG sets AED2=true by
+          #    default, and build_glm.sh unconditionally cd's into it when
+          #    that's set); it has no WITH_API/libaed-api concept.
+          # Cloning the wrong one is just wasted time; cloning neither is a
+          # hard build failure. Add more branches here as needed.
+          SIBLINGS="AED_Tools libaed-water libaed-benthic libaed-demo libutil libplot"
+          if [ "${{ inputs.glm_ref }}" = "v4alpha" ]; then
+            SIBLINGS="$SIBLINGS libaed-api"
+          else
+            SIBLINGS="$SIBLINGS libaed2"
+          fi
+          for repo in $SIBLINGS; do
             git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
           done
 
@@ -305,7 +345,22 @@ jobs:
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
-          for repo in AED_Tools libaed-water libaed2 libaed-benthic libaed-demo libaed-api libutil libplot; do
+          # libaed-api and libaed2 are mutually exclusive, branch-specific
+          # dependencies, not universal ones:
+          #  - v4alpha has a WITH_API/libaed-api plugin feature; AED2 doesn't
+          #    exist there at all (no Makefile support, no build_glm.sh flag).
+          #  - master needs libaed2 (its GLM_CONFIG sets AED2=true by
+          #    default, and build_glm.sh unconditionally cd's into it when
+          #    that's set); it has no WITH_API/libaed-api concept.
+          # Cloning the wrong one is just wasted time; cloning neither is a
+          # hard build failure. Add more branches here as needed.
+          SIBLINGS="AED_Tools libaed-water libaed-benthic libaed-demo libutil libplot"
+          if [ "${{ inputs.glm_ref }}" = "v4alpha" ]; then
+            SIBLINGS="$SIBLINGS libaed-api"
+          else
+            SIBLINGS="$SIBLINGS libaed2"
+          fi
+          for repo in $SIBLINGS; do
             git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
           done
 
