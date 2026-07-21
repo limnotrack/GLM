@@ -52,14 +52,14 @@ jobs:
       - name: Checkout GLM
         uses: actions/checkout@v4
         with:
-          repository: AquaticEcoDynamics/GLM
+          repository: limnotrack/GLM
           ref: ${{ inputs.glm_ref }}
           path: GLM
 
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
-          for repo in AED_Tools libaed-water libaed-benthic libaed-demo libaed-api libutil libplot; do
+          for repo in AED_Tools libaed-water libaed2 libaed-benthic libaed-demo libaed-api libutil libplot; do
             git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
           done
 
