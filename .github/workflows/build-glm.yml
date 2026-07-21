@@ -163,24 +163,6 @@ jobs:
           # patches below, or if ancillary/sources/versions.inc changes.
           key: glm-ancillary-windows-v1-${{ hashFiles('ancillary/sources/versions.inc') }}
 
-      # (a) The DKRZ gitlab mirror for libaec is prone to rate-limiting
-      #     anonymous/CI IPs (HTTP 429). Pre-fetch it from the GitHub
-      #     mirror instead and repackage it under the archive name/top
-      #     level directory name (libaec-v1.1.4) that build_extras.inc
-      #     expects, so the pipeline's own fetch step just finds it
-      #     already there and skips downloading it.
-      - name: "Workaround: pre-fetch libaec from GitHub mirror (Windows only)"
-        if: matrix.os == 'windows-latest' && steps.ancillary-cache.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p "$ROOT/ancillary/sources"
-          cd "$ROOT/ancillary/sources"
-          curl -sSL -o libaec.tmp.tar.gz \
-            "https://github.com/MathisRosenhauer/libaec/archive/refs/tags/v1.1.4.tar.gz"
-          tar xzf libaec.tmp.tar.gz
-          mv libaec-1.1.4 libaec-v1.1.4
-          tar czf libaec-v1.1.4.tar.gz libaec-v1.1.4
-          rm -rf libaec-v1.1.4 libaec.tmp.tar.gz
-
       - name: Build ancillary dependencies (Windows only)
         if: matrix.os == 'windows-latest' && steps.ancillary-cache.outputs.cache-hit != 'true'
         run: |
