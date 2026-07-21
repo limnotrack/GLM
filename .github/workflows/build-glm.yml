@@ -163,17 +163,7 @@ jobs:
           # patches below, or if ancillary/sources/versions.inc changes.
           key: glm-ancillary-windows-v1-${{ hashFiles('ancillary/sources/versions.inc') }}
 
-      # (a) HDF5 1.14.x's _Float16 conversion code references FLT16_MAX,
-      #     which mingw-w64's headers don't define for this GCC version
-      #     (GCC does provide the value via the builtin __FLT16_MAX__).
-      - name: "Patch: HDF5 FLT16_MAX gap (Windows only)"
-        if: matrix.os == 'windows-latest' && steps.ancillary-cache.outputs.cache-hit != 'true'
-        run: |
-          sed -i \
-            's#-DCMAKE_C_FLAGS="-I${FINALDIR}/include"#-DCMAKE_C_FLAGS="-I${FINALDIR}/include -DFLT16_MAX=__FLT16_MAX__"#' \
-            "$ROOT/ancillary/sources/scripts/build_extras.inc"
-
-      # (b) The DKRZ gitlab mirror for libaec is prone to rate-limiting
+      # (a) The DKRZ gitlab mirror for libaec is prone to rate-limiting
       #     anonymous/CI IPs (HTTP 429). Pre-fetch it from the GitHub
       #     mirror instead and repackage it under the archive name/top
       #     level directory name (libaec-v1.1.4) that build_extras.inc
