@@ -235,7 +235,7 @@ jobs:
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
-          for repo in AED_Tools libaed-water libaed-benthic libaed-demo libaed-api libutil libplot; do
+          for repo in AED_Tools libaed-water libaed2 libaed-benthic libaed-demo libaed-api libutil libplot; do
             git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
           done
 
@@ -305,7 +305,7 @@ jobs:
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
-          for repo in AED_Tools libaed-water libaed-benthic libaed-demo libaed-api libutil libplot; do
+          for repo in AED_Tools libaed-water libaed2 libaed-benthic libaed-demo libaed-api libutil libplot; do
             git clone --depth 1 "https://github.com/AquaticEcoDynamics/${repo}.git"
           done
 
