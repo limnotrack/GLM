@@ -97,6 +97,13 @@ jobs:
       - name: Checkout AED_Tools and sibling libraries
         run: |
           cd "$ROOT"
+          # AED_Tools comes from limnotrack's fork, not upstream: it carries
+          # a netcdf-c/netcdf-fortran build fix (build_netcdf_c.inc/
+          # build_netcdf_f.inc -fpermissive, commit 5a9a1ff) not yet merged
+          # into AquaticEcoDynamics/AED_Tools. Switch this back to
+          # AquaticEcoDynamics/AED_Tools once that PR lands upstream.
+          git clone --depth 1 "https://github.com/limnotrack/AED_Tools.git"
+
           # libaed-api and libaed2 are mutually exclusive, branch-specific
           # dependencies, not universal ones:
           #  - v4alpha has a WITH_API/libaed-api plugin feature; AED2 doesn't
@@ -106,7 +113,7 @@ jobs:
           #    that's set); it has no WITH_API/libaed-api concept.
           # Cloning the wrong one is just wasted time; cloning neither is a
           # hard build failure. Add more branches here as needed.
-          SIBLINGS="AED_Tools libaed-water libaed-benthic libaed-demo libutil libplot"
+          SIBLINGS="libaed-water libaed-benthic libaed-demo libutil libplot"
           if [ "${{ inputs.glm_ref }}" = "v4alpha" ]; then
             SIBLINGS="$SIBLINGS libaed-api"
           else
@@ -181,28 +188,7 @@ jobs:
             's#-DCMAKE_C_FLAGS="-I${FINALDIR}/include"#-DCMAKE_C_FLAGS="-I${FINALDIR}/include -DFLT16_MAX=__FLT16_MAX__"#' \
             "$ROOT/ancillary/sources/scripts/build_extras.inc"
 
-      # (c) netcdf-c 4.9.2 fails a pointer-type check that GCC 14+ turned
-      #     into a hard error by default (mismatched struct stat / struct
-      #     _stat64 in dpathmgr.c, from newer mingw-w64 headers).
-      - name: "Patch: netcdf-c/netcdf-fortran strict pointer-type errors (Windows only)"
-        if: matrix.os == 'windows-latest' && steps.ancillary-cache.outputs.cache-hit != 'true'
-        run: |
-          # (sed's /pattern/a\text form breaks here: a backslash sitting right
-          # against the closing delimiter - both in the address and in a
-          # trailing continuation backslash in the appended text - gets
-          # parsed as escaping the delimiter/newline instead of being taken
-          # literally, so sed either errors ("unterminated address regex") or
-          # silently drops the line's trailing "\", corrupting the multi-line
-          # cmake command it's inserted into. awk has no such delimiter to
-          # collide with, so it's used here instead.)
-          for f in "$ROOT/ancillary/sources/scripts/build_netcdf_c.inc" \
-                   "$ROOT/ancillary/sources/scripts/build_netcdf_f.inc"; do
-            awk '{print} /-DCMAKE_BUILD_TYPE:STRING=Release/{print "           -DCMAKE_C_FLAGS:STRING=-fpermissive \\"}' \
-              "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-            grep -q -- '-fpermissive' "$f" || { echo "::error::netcdf patch did not apply to $f"; exit 1; }
-          done
-
-      # (d) The DKRZ gitlab mirror for libaec is prone to rate-limiting
+      # (c) The DKRZ gitlab mirror for libaec is prone to rate-limiting
       #     anonymous/CI IPs (HTTP 429). Pre-fetch it from the GitHub
       #     mirror instead and repackage it under the archive name/top
       #     level directory name (libaec-v1.1.4) that build_extras.inc
