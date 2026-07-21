@@ -109,6 +109,14 @@ else ifeq ($(OSTYPE),Msys)
   endif
   SHARED=-shared
   so_ext=dll
+  # do_model_non_avg (and siblings) declare several MaxInf/MaxOut/MaxVars-sized
+  # arrays (WQNew[MaxInf*MaxVars] alone is 10000*60 doubles, ~4.8MB) as plain
+  # locals rather than heap-allocating them. That fits fine under Linux/macOS's
+  # ~8MB default thread stack, but silently overflows Windows' 2MB default
+  # link-time stack reserve - crashing with no error message right on entry to
+  # the function, before any of its own code runs. Reserve more stack at link
+  # time until these arrays are heap-allocated properly upstream.
+  EXTRALINKFLAGS=-Wl,--stack,67108864
 else ifeq ($(OSTYPE),FreeBSD)
   FINCLUDES+=-I/usr/local/flang/include -I/usr/local/include
   CINCLUDES+=-I/usr/local/include
