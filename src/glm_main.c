@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
 #endif
         else if (strcmp(*argv, "--write_nml") == 0) {
             glm_write_nml_mode = TRUE;
-            glm_example_fname = "glm4.nml";
+            glm_example_fname = "glm4_template.nml";
             if ( argc > 1 && strncmp(argv[1], "--", 2) != 0 ) {
                 argv++; argc--;
                 glm_example_fname = *argv;
@@ -204,7 +204,10 @@ int main(int argc, char *argv[])
         printf("\n");
         printf("     --nml <nmlfile> : get parameters from nmlfile\n");
         printf("\n");
-        printf("     --write_nml <nmlfile> : write a baseline/example config and exit (default 'glm4.nml')\n");
+        printf("     --write_nml <nmlfile> : write a baseline/example config and exit (default 'glm4_template.nml')\n");
+        printf("                             also writes a baseline 'aed_template.nml' (sedflux/oxygen/silica/\n");
+        printf("                             nitrogen/phosphorus/organic_matter/phytoplankton/totals) - the\n");
+        printf("                             <nmlfile> argument only renames the GLM-side file, not this one\n");
         printf("\n");
 #ifdef PLOTS
 #ifdef XPLOTS

@@ -34,7 +34,7 @@
 
 #ifdef __STDC__
 
-typedef void (*wq_init_glm_t)(char *fname, size_t *len, int *NumWQVars, int *NumWQBen);
+typedef void (*wq_init_glm_t)(char *fname, size_t *len, int *NumWQVars, int *NumWQBen, int *write_mode);
 typedef void (*wq_set_glm_data_t)(void);
 typedef void (*wq_do_glm_t)(int *wlev);
 typedef void (*wq_clean_glm_t)(void);
@@ -80,7 +80,7 @@ int prime_wq(const char *which);
 extern wq_set_glm_zones_t p_wq_set_glm_zones;
 #define wq_set_glm_zones  (*p_wq_set_glm_zones)
 
-void wq_init_glm(char *fname, size_t *len, int *NumWQVars, int *NumWQBen);
+void wq_init_glm(char *fname, size_t *len, int *NumWQVars, int *NumWQBen, int *write_mode);
 void wq_set_glm_data(void);
 void wq_do_glm(int *wlev);
 void wq_clean_glm(void);

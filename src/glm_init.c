@@ -1895,11 +1895,18 @@ for (i = 0; i < n_zones; i++) {
 
     Num_WQ_Vars = 0;
 
-    if ( wq_calc ) {
-        size_t l = strlen(wq_nml_file);
+    if ( wq_calc || glm_write_nml_mode ) {
+        // In --write_nml mode, always target a fixed "*_template" filename
+        // rather than wq_nml_file's real-run default ("aed.nml") - otherwise
+        // running --write_nml in a directory that already has a real aed.nml
+        // would silently overwrite it.
+        char *wq_out_fname = glm_write_nml_mode ? "aed_template.nml" : wq_nml_file;
+        size_t l = strlen(wq_out_fname);
+        int wq_write_mode = glm_write_nml_mode ? 1 : 0;
 
         prime_wq(wq_lib);
-        wq_init_glm(wq_nml_file, &l, &Num_WQ_Vars, &Num_WQ_Ben); // Reads WQ namelist file
+        // Reads WQ namelist file (or, in --write_nml mode, writes a baseline one)
+        wq_init_glm(wq_out_fname, &l, &Num_WQ_Vars, &Num_WQ_Ben, &wq_write_mode);
         Tot_WQ_Vars = Num_WQ_Vars + Num_WQ_Ben;
         fprintf(stdout, "     WQ plugin active: included Num_WQ_Vars = %d\n", Num_WQ_Vars);
         if ( Tot_WQ_Vars > MaxVars ) {
