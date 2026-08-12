@@ -205,9 +205,9 @@ int main(int argc, char *argv[])
         printf("     --nml <nmlfile> : get parameters from nmlfile\n");
         printf("\n");
         printf("     --write_nml <nmlfile> : write a baseline/example config and exit (default 'glm4_template.nml')\n");
-        printf("                             also writes a baseline 'aed_template.nml' (sedflux/oxygen/silica/\n");
-        printf("                             nitrogen/phosphorus/organic_matter/phytoplankton/totals) - the\n");
-        printf("                             <nmlfile> argument only renames the GLM-side file, not this one\n");
+        printf("                             also writes a baseline 'aed_template.nml' (sedflux/carbon/oxygen/\n");
+        printf("                             silica/nitrogen/phosphorus/organic_matter/phytoplankton/totals) -\n");
+        printf("                             the <nmlfile> argument only renames the GLM-side file, not this one\n");
         printf("\n");
 #ifdef PLOTS
 #ifdef XPLOTS
