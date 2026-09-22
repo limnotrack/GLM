@@ -1170,12 +1170,10 @@ void do_surface_thermodynamics(int jday, int iclock, int LWModel,
                              sed_temps );
                             // &soil_heat_flux );
                   */
-#ifdef AED
-                  // ZSoilTemp advances this zone's sediment temperature profile
-                  // and stores the sediment-water interface heat flux (W/m2) in
-                  // theZones[z].heatflux.
-                  if ( p_wq_ZSoilTemp != NULL ) ZSoilTemp(&theZones[z]);
-#endif
+                  // zZSoilTemp (glm_sed_heat.F90, core GLM) advances this zone's
+                  // sediment temperature profile and stores the sediment-water
+                  // interface heat flux (W/m2) in theZones[z].heatflux.
+                  zZSoilTemp(&theZones[z]);
                   // flux heat from the soil into the water, if the layer is over z
                   for (i = botmLayer+1; i <= surfLayer; i++) {
                     if (layer_zone[i] == z){

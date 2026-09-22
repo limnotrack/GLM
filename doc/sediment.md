@@ -30,7 +30,7 @@ heat-exchange approach with `sed_heat_model`.
 > | Simple seasonal bed temperature | `sed_heat_model = 1` |
 > | One bed for the whole lake | `benthic_mode = 1` |
 > | Depth-banded bed zones | `benthic_mode = 2` + `n_zones`, `zone_heights` |
-> | A process-based soil column | `sed_heat_model = 2` (requires `benthic_mode = 2` + a WQ module) |
+> | A process-based soil column | `sed_heat_model = 2` (requires `benthic_mode = 2`) |
 
 If the `&sediment` block is absent, sediment heating is switched off entirely.
 
@@ -66,7 +66,7 @@ If the `&sediment` block is absent, sediment heating is switched off entirely.
 /
 ```
 
-**Dynamic soil column** (requires `benthic_mode = 2` and an active WQ module):
+**Dynamic soil column** (requires `benthic_mode = 2`; no WQ module needed):
 
 ```fortran
 &sediment
@@ -231,12 +231,10 @@ All thermal properties are **optional** — the defaults reproduce a typical min
 and match the reference implementation (see §8). Most users need only set
 `n_sed_layers`, `sed_temp_depth`, `sed_vwc` and the deep temperature.
 
-**Requirements.** The dynamic model:
-
-- requires **`benthic_mode = 2`** (it operates per sediment zone), and
-- requires an **active water-quality module** (`&wq_setup wq_lib = 'aed'` or `'api'`),
-  which provides the soil solver. Running `sed_heat_model = 2` without a WQ module is a
-  configuration error.
+**Requirements.** The dynamic model requires **`benthic_mode = 2`** (it operates per
+sediment zone). It has no water-quality dependency — the soil solver
+(`src/glm_sed_heat.F90`) is core GLM code, so `sed_heat_model = 2` works with or
+without an active WQ module (`&wq_setup wq_lib = 'aed'`/`'api'`).
 
 **Use the dynamic model when** you need a realistic sediment heat store — for example to
 capture the thermal inertia and seasonal phase lag of the bed, near-bed temperatures, or

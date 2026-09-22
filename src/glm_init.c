@@ -1173,7 +1173,6 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
         benthic_mode = 1;
     }
 
-#ifdef AED
     /**************************************************************************
      * sed_heat_model == 2 : dynamic soil/sediment temperature model.        *
      * A single soil-column profile (depths + water content) is shared       *
@@ -1181,13 +1180,11 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
      * profile with a spin-up. n_sed_layers is the TOTAL number of nodes N    *
      * (including the surface-interface and deep-boundary nodes); the solver  *
      * integrates the N-2 interior nodes (see zZSoilTemp).                    *
+     *                                                                        *
+     * The solver (glm_sed_heat.F90) is core GLM code with no WQ dependency,  *
+     * so this runs whether or not a WQ module (aed/api) is active.          *
      **************************************************************************/
     if ( sed_heat_model == 2 ) {
-        if ( ! wq_calc ) {
-            fprintf(stderr, "     ERROR: sed_heat_model = 2 requires an active WQ module (aed/api);\n");
-            fprintf(stderr, "            the dynamic soil-temperature solver (zZSoilTemp) is provided by the WQ library.\n");
-            exit(1);
-        }
         if ( n_zones <= 0 || theZones == NULL ) {
             fprintf(stderr, "     ERROR: sed_heat_model = 2 requires sediment zones (benthic_mode = 2)\n");
             exit(1);
@@ -1283,7 +1280,6 @@ void init_glm(int *jstart, char *outp_dir, char *outp_fn, int *nsave)
             fprintf(stderr, "     sed_heat_model = 2: %d sediment layers initialised across %d zones\n",
                     n_sed_layers, n_zones);
     }
-#endif
 
 /*
 fprintf(stderr, "n_zones %d\n", n_zones);
