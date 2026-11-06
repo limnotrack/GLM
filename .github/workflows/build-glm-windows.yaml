@@ -137,6 +137,28 @@ jobs:
           choco install -y mingw
           choco install -y cmake --installargs 'ADD_CMAKE_TO_PATH=System'
 
+      # Savannah redirects to rotating mirrors, and a bad one occasionally
+      # returns an HTML page instead of the tarball ("not in gzip format").
+      # Pre-fetch with validation + fallbacks; fetch_gd.inc skips the
+      # download when the tarball already exists.
+      - name: Pre-fetch freetype (validated, with mirror fallbacks)
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: ${{ github.workspace }}/ancillary/sources
+        run: |
+          . ./versions.inc
+          F="${FREETYPE2}.tar.gz"
+          for url in \
+            "https://download.savannah.gnu.org/releases/freetype/$F" \
+            "https://download.savannah.nongnu.org/releases/freetype/$F" \
+            "https://sourceforge.net/projects/freetype/files/freetype2/${FREETYPE2V}/$F/download"; do
+            for attempt in 1 2 3; do
+              echo "fetching $url (attempt $attempt)"
+              curl -fsSL "$url" -o "$F" && gzip -t "$F" && { echo "OK: $F"; break 2; }
+              rm -f "$F"; sleep 5
+            done
+          done
+          [ -f "$F" ] || { echo "::error::could not download a valid $F from any mirror"; exit 1; }
+
       - name: Build ancillary dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         working-directory: ${{ github.workspace }}/ancillary
